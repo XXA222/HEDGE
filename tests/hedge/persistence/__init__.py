@@ -1,0 +1,1 @@
+"""Hedge persistence test package."""

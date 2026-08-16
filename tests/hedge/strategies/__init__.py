@@ -1,0 +1,1 @@
+"""Hedge strategy test package."""
