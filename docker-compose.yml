@@ -1,0 +1,27 @@
+---
+services:
+  freqtrade:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_HEDGE_RISKLEVEL_RL: "true"
+    image: freqtrade-hedge:1.7-risklevel-rl-cpu
+    restart: unless-stopped
+    container_name: freqtrade-hedge-risklevel-rl
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      FT_APP_ENV: docker
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - "./user_data:/opt/freqtrade-hedge/user_data"
+    ports:
+      - "127.0.0.1:8080:8080"
+    command: >
+      freqtrade trade
+      --logfile /opt/freqtrade-hedge/user_data/logs/freqtrade.log
+      --db-url sqlite:////opt/freqtrade-hedge/user_data/tradesv3.sqlite
+      --config /opt/freqtrade-hedge/user_data/config.json
+      --strategy SampleStrategy

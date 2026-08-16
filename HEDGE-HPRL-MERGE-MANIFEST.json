@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "assembled_at": "2026-08-16T20:00:00+08:00",
+  "destination": "D:\\Program Files\\HEDGE",
+  "merge_model": "hedge-mainline-with-hprl-code-submodule",
+  "hedge_source": {
+    "path": "D:\\Program Files\\freqtradev2026.07-hedge-merge",
+    "branch": "agent/hedge-backup-2026-08-15-r2",
+    "head": "9c0a417470580c4eaf919d661a7be00203f37d23",
+    "working_tree_status_entries_at_merge": 564,
+    "working_tree_used": true
+  },
+  "hprl_source": {
+    "path": "D:\\Program Files\\freqtradev2026.07-hedge-merge-docker\\HPRL",
+    "branch": "master",
+    "head": "b05a5214ffb64cdf3e5385c8deca5fa6fc0f9917",
+    "working_tree_status_entries_at_merge": 23,
+    "working_tree_used": true,
+    "api_version": "2.5.2"
+  },
+  "included_hprl_scopes": [
+    "freqtrade/hedge/hprl",
+    "freqtrade/hedge/production",
+    "freqtrade/hedge/memory_lifecycle.py",
+    "tests/hedge/hprl",
+    "tests/hedge/production",
+    "config_examples/hprl.example.json",
+    "config_examples/hprl.gpu.example.json",
+    "requirements-hprl.txt",
+    "requirements-hprl-postgres.txt",
+    "tools/*hprl*.py",
+    "scripts/*HPRL*.ps1"
+  ],
+  "excluded_from_overlay": [
+    "duplicate HPRL Freqtrade mainline files",
+    "source .git directories",
+    "source caches and artifacts"
+  ]
+}

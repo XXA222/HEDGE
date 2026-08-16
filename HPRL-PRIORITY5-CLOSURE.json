@@ -1,0 +1,29 @@
+{
+  "schema": "hprl-priority5-closure-release-v1",
+  "release": "freqtrade-hedge-hprl-priority5-closure-v1",
+  "baseline_repository": "XXA222/HPRL",
+  "baseline_commit": "b05a5214ffb64cdf3e5385c8deca5fa6fc0f9917",
+  "baseline_tree": "c36cce98277fd9b1be1877260c1364e5e962f234",
+  "development_date": "2026-08-16",
+  "priorities": [
+    "source-runtime-container-test-isolation-and-ci-governance",
+    "postgresql-dual-session-visibility-and-composite-real-evidence",
+    "real-market-model-behavior-and-algorithm-qualification",
+    "fault-coverage-and-recovery-qualification",
+    "two-year-backtest-resource-and-memory-stability"
+  ],
+  "safety": {
+    "github_write": false,
+    "live_exchange_write_added": false,
+    "offline_evidence_can_promote_postgresql": false,
+    "offline_evidence_can_promote_real_market": false,
+    "offline_evidence_can_promote_two_year": false
+  },
+  "local_development_validation": {
+    "targeted_tests": 22,
+    "targeted_tests_status": "PASS",
+    "compile_status": "PASS",
+    "full_upstream_suite": "MUST_RUN_IN_TARGET_CONTAINER_BY_ONESHOT",
+    "r4_cli_import_regression": "PASS"
+  }
+}
