@@ -37,6 +37,8 @@ class SignalLike(Protocol):
     short_score: Decimal
     target_net: Decimal | None
     target_net_ratio: Decimal | None
+    target_long_notional: Decimal | None
+    target_short_notional: Decimal | None
     confidence: Decimal
     risk_scale: Decimal
     long_exposure_scale: Decimal
@@ -138,6 +140,21 @@ class ReadonlyPlanningContextBuilder:
         )
         target_net_ratio = getattr(signal, "target_net_ratio", None)
         target_net = getattr(signal, "target_net", None)
+        allow_new_risk = getattr(signal, "allow_new_risk", True)
+        if not isinstance(allow_new_risk, bool):
+            raise TypeError("signal allow_new_risk must be bool")
+        target_long_notional = getattr(signal, "target_long_notional", None)
+        target_short_notional = getattr(signal, "target_short_notional", None)
+        if (target_long_notional is None) != (target_short_notional is None):
+            raise ValueError("signal exact dual-leg notionals must be supplied together")
+        for name, value in (
+            ("target_long_notional", target_long_notional),
+            ("target_short_notional", target_short_notional),
+        ):
+            if value is not None and (
+                not isinstance(value, Decimal) or not value.is_finite() or value < ZERO
+            ):
+                raise ValueError(f"signal {name} must be a finite non-negative Decimal")
         directive = StrategyDirective(
             long_score=signal.long_score,
             short_score=signal.short_score,
@@ -147,7 +164,7 @@ class ReadonlyPlanningContextBuilder:
             risk_scale=getattr(signal, "risk_scale", Decimal(1)),
             long_exposure_scale=getattr(signal, "long_exposure_scale", Decimal(1)),
             short_exposure_scale=getattr(signal, "short_exposure_scale", Decimal(1)),
-            allow_new_risk=bool(getattr(signal, "allow_new_risk", True)),
+            allow_new_risk=allow_new_risk,
             regime=str(getattr(signal, "regime", "UNKNOWN")),
             reason=str(
                 getattr(signal, "strategy_reason", getattr(signal, "reason", "LEGACY_SIGNAL"))
@@ -168,6 +185,12 @@ class ReadonlyPlanningContextBuilder:
             long_signal=directive.long_score,
             short_signal=directive.short_score,
             target_net_quantity=effective_target,
+            target_long_quantity=(
+                target_long_notional / market.mark if target_long_notional is not None else None
+            ),
+            target_short_quantity=(
+                target_short_notional / market.mark if target_short_notional is not None else None
+            ),
         )
         return BuiltPlanningContext(
             context=context,
@@ -220,18 +243,24 @@ class ReadonlyPlanningContextBuilder:
         try:
             position_side = PositionSide(str(order.position_side).upper())
             order_side = OrderSide(str(order.side).upper())
-        except ValueError:
-            return None
+        except ValueError as exc:
+            raise ValueError(
+                f"managed-symbol active order {order.exchange_order_id!r} has invalid side identity"
+            ) from exc
         raw: Mapping[str, object] = order.raw if isinstance(order.raw, Mapping) else {}
         raw_price = raw.get("price") or raw.get("p") or raw.get("stopPrice")
         price = order.average_price
         if price <= ZERO and raw_price is not None:
             try:
                 price = Decimal(str(raw_price))
-            except Exception:
-                price = ZERO
+            except Exception as exc:
+                raise ValueError(
+                    f"managed-symbol active order {order.exchange_order_id!r} has invalid price"
+                ) from exc
         if price <= ZERO:
-            price = market.mark
+            raise ValueError(
+                f"managed-symbol active order {order.exchange_order_id!r} lacks a positive price"
+            )
         reduce_only = bool(order.reduce_only)
         leg = long if position_side is PositionSide.LONG else short
         action = (

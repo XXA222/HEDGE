@@ -76,6 +76,8 @@ class SignalSnapshot:
     regime: str = "UNSPECIFIED"
     strategy_reason: str = ""
     candle: AnalyzedCandle | None = None
+    target_long_notional: Decimal | None = None
+    target_short_notional: Decimal | None = None
 
     def __post_init__(self) -> None:
         for name in ("long_score", "short_score"):
@@ -94,6 +96,16 @@ class SignalSnapshot:
             value = getattr(self, name)
             if not value.is_finite() or value < 0 or value > 1:
                 raise ValueError(f"{name} must be within [0, 1]")
+        if not isinstance(self.allow_new_risk, bool):
+            raise TypeError("allow_new_risk must be bool")
+        exact_targets = (self.target_long_notional, self.target_short_notional)
+        if (exact_targets[0] is None) != (exact_targets[1] is None):
+            raise ValueError("exact dual-leg notionals must be supplied together")
+        for name, value in zip(
+            ("target_long_notional", "target_short_notional"), exact_targets, strict=True
+        ):
+            if value is not None and (not value.is_finite() or value < 0):
+                raise ValueError(f"{name} must be finite and non-negative")
         if self.candle_close_time.tzinfo is None or self.feature_timestamp.tzinfo is None:
             raise ValueError("signal timestamps must be timezone-aware")
         if self.candle is not None and self.candle.close_time != self.candle_close_time:

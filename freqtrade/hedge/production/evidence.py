@@ -1,13 +1,15 @@
 """Immutable, hash-chained production evidence ledger."""
 from __future__ import annotations
 
+import json
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
-import json
 from pathlib import Path
-from contextlib import contextmanager
 from typing import Iterable, Mapping
+
+from freqtrade.hedge.errors import HedgePersistenceError
 
 from ._file_io import atomic_write_text, exclusive_file_lock
 from .contracts import EvidenceKind, EvidenceStatus
@@ -254,7 +256,7 @@ class EvidenceLedger:
         ).hexdigest()
 
 
-class EvidenceConcurrencyError(RuntimeError):
+class EvidenceConcurrencyError(HedgePersistenceError):
     """Raised when an evidence ledger compare-and-swap detects another writer."""
 
 

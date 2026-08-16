@@ -61,3 +61,23 @@ def test_metadata_and_bounds_fail_closed():
         StrategyDirective(confidence=Decimal("1.1"))
     with pytest.raises(ValueError):
         StrategyDirective(target_net_quantity=Decimal(1), target_net_ratio=Decimal("0.1"))
+
+
+@pytest.mark.parametrize("value", (None, 0, 1, "yes", "garbage", [], {}))
+def test_present_invalid_allow_new_risk_values_fail_closed(value: object):
+    assert not directive_from_values({"hedge_allow_new_risk": value}).allow_new_risk
+
+
+def test_missing_allow_new_risk_remains_compatible_and_invalid_scales_close_risk():
+    assert directive_from_values({}).allow_new_risk
+    assert directive_from_values({"hedge_allow_new_risk": "TRUE"}).allow_new_risk
+    directive = directive_from_values(
+        {
+            "hedge_confidence": "nan",
+            "hedge_risk_scale": "inf",
+            "hedge_long_exposure_scale": "bad",
+            "hedge_short_exposure_scale": None,
+        }
+    )
+    assert directive.confidence == directive.risk_scale == Decimal(0)
+    assert directive.long_exposure_scale == directive.short_exposure_scale == Decimal(0)

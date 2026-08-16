@@ -75,6 +75,7 @@ _IGNORED_DIRS = {
 }
 
 _LIVE_CRITICAL_PREFIXES = (
+    "freqtrade/freqai/hedge_rl/",
     "freqtrade/hedge/production/",
     "freqtrade/hedge/execution/",
     "freqtrade/hedge/hprl/",
@@ -197,8 +198,8 @@ def _module_constant(path: Path, name: str) -> str:
 def build_canonical_source_snapshot(
     root: str | Path,
     *,
-    github_baseline_repository: str = "XXA222/HPRL",
-    github_baseline_commit: str = "c7411179744a38b3af91a11a91985db2327c77a4",
+    github_baseline_repository: str = "XXA222/HEDGE",
+    github_baseline_commit: str = "62bfbc6acf4b1ff87b71bf4212a3488fddd72c67",
 ) -> CanonicalSourceSnapshot:
     root_path = Path(root).resolve()
     missing = tuple(path for path in _REQUIRED if not (root_path / path).is_file())

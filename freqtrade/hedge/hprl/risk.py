@@ -36,8 +36,10 @@ class HedgeActionProjector:
             raise ValueError(
                 "HPRL actions and current positions must share [..., symbols, 2] shape"
             )
-        if self.validate_inputs and (not torch.isfinite(current).all() or (current < 0).any()):
-            raise ValueError("current positions must be finite and non-negative")
+        if not torch.isfinite(raw_target).all() or not torch.isfinite(current).all():
+            raise ValueError("actions and current positions must be finite")
+        if (current < 0).any():
+            raise ValueError("current positions must be non-negative")
         original = raw_target
         target = torch.nan_to_num(
             original,
@@ -81,7 +83,7 @@ class HedgeActionProjector:
                 device=target.device,
                 dtype=target.dtype,
             )
-            if self.validate_inputs and not torch.isfinite(buffer).all():
+            if not torch.isfinite(buffer).all():
                 raise ValueError("liquidation_buffer must be finite")
             defensive = buffer < self.config.min_liquidation_buffer
             while defensive.ndim < target.ndim:

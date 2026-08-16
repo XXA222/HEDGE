@@ -239,7 +239,12 @@ class HedgeRiskRewardModel:
 
     @staticmethod
     def _safe_log_return(previous_equity: float, equity: float) -> float:
-        if previous_equity <= 0 or equity <= 0:
+        if (
+            not math.isfinite(previous_equity)
+            or not math.isfinite(equity)
+            or previous_equity <= 0
+            or equity <= 0
+        ):
             return -1.0
         return math.log(equity / previous_equity)
 
@@ -504,6 +509,9 @@ class HedgeRiskRewardModel:
 
     def _transform_reward(self, reward: float) -> float:
         clip = self.config.reward_clip
+        if not math.isfinite(reward):
+            # Numerical corruption must never become a positive learning signal.
+            return -clip
         if self.config.soft_clip:
             return clip * math.tanh(reward / clip)
         return max(-clip, min(clip, reward))

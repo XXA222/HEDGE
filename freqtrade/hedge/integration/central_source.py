@@ -13,6 +13,8 @@ import py_compile
 from dataclasses import dataclass
 from pathlib import Path
 
+from freqtrade.hedge.errors import HedgeSafetyError
+
 
 _REQUIRED_ORDER_FIELDS = frozenset(
     {
@@ -34,7 +36,7 @@ _REQUIRED_ISOLATION_MARKERS = (
 )
 
 
-class IntegrationSafetyError(RuntimeError):
+class IntegrationSafetyError(HedgeSafetyError):
     """Raised when the central persistence source is not the verified mainline."""
 
 

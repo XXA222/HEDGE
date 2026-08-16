@@ -9,8 +9,10 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from freqtrade.hedge.errors import HedgeConfigurationError
 
-class DeploymentConfigError(ValueError):
+
+class DeploymentConfigError(HedgeConfigurationError):
     """Raised when deployment configuration is unsafe or incomplete."""
 
 

@@ -31,6 +31,11 @@ class TargetPosition:
 
 
 def _target_net_quantity(context: PlanningContext) -> Decimal:
+    if context.target_long_quantity is not None:
+        return q_down(
+            context.target_long_quantity - context.target_short_quantity,
+            context.market.qty_step,
+        )
     if context.target_net_quantity is not None:
         return q_down(context.target_net_quantity, context.market.qty_step)
     equity = max(context.wallet.equity, ZERO)
@@ -61,29 +66,36 @@ def calculate_target(context: PlanningContext, side: PositionSide) -> TargetPosi
 
     equity = max(context.wallet.equity, ZERO)
     price = market.mark
-    core = equity * cfg.core_exposure(side) / price
-    signal = max(-ONE, min(ONE, D(context.signal(side))))
-    tactical = equity * cfg.tactical_exposure(side) * max(signal, ZERO) / price
     maximum = equity * cfg.side_cap(side) / price
-
-    # When account net exposure materially misses its configured objective, suppress new
-    # tactical risk on the opposing side. Existing opposing inventory remains reducible.
-    if equity > ZERO:
-        net_gap_ratio = abs(net_gap * price) / equity
-        opposing = (net_gap > ZERO and side is PositionSide.SHORT) or (
-            net_gap < ZERO and side is PositionSide.LONG
-        )
-        if opposing and net_gap_ratio >= cfg.net_repair_threshold:
-            tactical = ZERO
-
-    core = q_down(core, market.qty_step)
-    tactical = q_down(tactical, market.qty_step)
     maximum = q_down(maximum, market.qty_step)
-    if core > maximum:
-        core = maximum
+    exact_target = context.target_quantity(side)
+    if exact_target is not None:
+        # A model/Risk-Level dual-leg target is already sized.  Preserve both legs
+        # independently, subject only to the planner's hard side cap and market step.
+        core = min(q_down(exact_target, market.qty_step), maximum)
         tactical = ZERO
-    elif core + tactical > maximum:
-        tactical = q_down(maximum - core, market.qty_step)
+    else:
+        core = equity * cfg.core_exposure(side) / price
+        signal = max(-ONE, min(ONE, D(context.signal(side))))
+        tactical = equity * cfg.tactical_exposure(side) * max(signal, ZERO) / price
+
+        # When account net exposure materially misses its configured objective, suppress new
+        # tactical risk on the opposing side. Existing opposing inventory remains reducible.
+        if equity > ZERO:
+            net_gap_ratio = abs(net_gap * price) / equity
+            opposing = (net_gap > ZERO and side is PositionSide.SHORT) or (
+                net_gap < ZERO and side is PositionSide.LONG
+            )
+            if opposing and net_gap_ratio >= cfg.net_repair_threshold:
+                tactical = ZERO
+
+        core = q_down(core, market.qty_step)
+        tactical = q_down(tactical, market.qty_step)
+        if core > maximum:
+            core = maximum
+            tactical = ZERO
+        elif core + tactical > maximum:
+            tactical = q_down(maximum - core, market.qty_step)
     total = core + tactical
     return TargetPosition(
         side=side,

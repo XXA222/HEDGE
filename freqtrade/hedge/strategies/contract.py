@@ -27,21 +27,26 @@ HEDGE_SIGNAL_COLUMNS = (
     "hedge_reason",
     "hedge_model_version",
 )
+_MISSING = object()
 
 
 def _decimal(
     value: object,
     default: Decimal,
     *,
+    invalid: Decimal,
     low: Decimal | None = None,
     high: Decimal | None = None,
 ) -> Decimal:
-    try:
-        result = value if isinstance(value, Decimal) else Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
+    if value is _MISSING:
         result = default
-    if not result.is_finite():
-        result = default
+    else:
+        try:
+            result = value if isinstance(value, Decimal) else Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            result = invalid
+        if not result.is_finite():
+            result = invalid
     if low is not None:
         result = max(low, result)
     if high is not None:
@@ -71,18 +76,18 @@ def _optional_decimal(
 
 
 def _bool(value: object, default: bool = True) -> bool:
+    if value is _MISSING:
+        return default
     if isinstance(value, bool):
         return value
-    if value is None:
-        return default
-    if isinstance(value, int | float | Decimal):
-        return bool(value)
-    text = str(value).strip().lower()
-    if text in {"1", "true", "yes", "on"}:
-        return True
-    if text in {"0", "false", "no", "off"}:
-        return False
-    return default
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text == "true":
+            return True
+        if text == "false":
+            return False
+    # An explicitly present but malformed control field must never unlock risk.
+    return False
 
 
 @runtime_checkable
@@ -170,44 +175,50 @@ def directive_from_values(values: Mapping[str, object]) -> StrategyDirective:
         exact = None
     return StrategyDirective(
         long_score=_decimal(
-            values.get("hedge_long_score", values.get("enter_long", ZERO)),
+            values.get("hedge_long_score", values.get("enter_long", _MISSING)),
             ZERO,
+            invalid=ZERO,
             low=ZERO,
             high=ONE,
         ),
         short_score=_decimal(
-            values.get("hedge_short_score", values.get("enter_short", ZERO)),
+            values.get("hedge_short_score", values.get("enter_short", _MISSING)),
             ZERO,
+            invalid=ZERO,
             low=ZERO,
             high=ONE,
         ),
         target_net_quantity=exact,
         target_net_ratio=ratio,
         confidence=_decimal(
-            values.get("hedge_confidence", ONE),
+            values.get("hedge_confidence", _MISSING),
             ONE,
+            invalid=ZERO,
             low=ZERO,
             high=ONE,
         ),
         risk_scale=_decimal(
-            values.get("hedge_risk_scale", ONE),
+            values.get("hedge_risk_scale", _MISSING),
             ONE,
+            invalid=ZERO,
             low=ZERO,
             high=ONE,
         ),
         long_exposure_scale=_decimal(
-            values.get("hedge_long_exposure_scale", ONE),
+            values.get("hedge_long_exposure_scale", _MISSING),
             ONE,
+            invalid=ZERO,
             low=ZERO,
             high=ONE,
         ),
         short_exposure_scale=_decimal(
-            values.get("hedge_short_exposure_scale", ONE),
+            values.get("hedge_short_exposure_scale", _MISSING),
             ONE,
+            invalid=ZERO,
             low=ZERO,
             high=ONE,
         ),
-        allow_new_risk=_bool(values.get("hedge_allow_new_risk", True), True),
+        allow_new_risk=_bool(values.get("hedge_allow_new_risk", _MISSING), True),
         regime=str(values.get("hedge_regime") or "UNSPECIFIED")[:64],
         reason=str(values.get("hedge_reason") or "")[:256],
         model_version=str(values.get("hedge_model_version") or "strategy")[:128],

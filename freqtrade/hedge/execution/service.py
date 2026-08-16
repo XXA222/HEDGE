@@ -29,7 +29,7 @@ from freqtrade.hedge.contracts.types import (
 from freqtrade.hedge.contracts.types import (
     PositionSide as _PositionSide,
 )
-from freqtrade.hedge.errors import HedgeDataError
+from freqtrade.hedge.errors import HedgeDataError, HedgeDefinitiveError, HedgeStateError
 from freqtrade.hedge.numeric import to_decimal
 
 from .client_order_id import build_client_order_id, validate_client_order_id
@@ -719,11 +719,11 @@ class NullMetrics:
         return None
 
 
-class ExecutionBlockedError(RuntimeError):
-    pass
+class ExecutionBlockedError(HedgeStateError):
+    """The current execution state forbids this request."""
 
 
-class DefinitiveExchangeOperationError(RuntimeError):
+class DefinitiveExchangeOperationError(HedgeDefinitiveError):
     """The adapter guarantees that the requested side effect did not occur."""
 
 

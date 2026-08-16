@@ -248,11 +248,10 @@ class TensorReplayBuffer:
         if not (action.shape[0] == reward.shape[0] == next_obs.shape[0] == done.shape[0] == n):
             raise ValueError("replay batch dimensions are inconsistent")
         values = (obs, action, reward, next_obs, done)
-        if self.validate_inputs:
-            if any(not torch.isfinite(value).all() for value in values):
-                raise ValueError("replay transitions must be finite")
-            if ((done < 0) | (done > 1)).any():
-                raise ValueError("replay done flags must be within [0, 1]")
+        if any(not torch.isfinite(value).all() for value in values):
+            raise ValueError("replay transitions must be finite")
+        if ((done < 0) | (done > 1)).any():
+            raise ValueError("replay done flags must be within [0, 1]")
         if n >= self.capacity:
             obs, action, reward, next_obs, done = (
                 value[-self.capacity:] for value in values

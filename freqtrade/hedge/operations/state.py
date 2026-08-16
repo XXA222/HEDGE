@@ -8,12 +8,14 @@ from datetime import datetime
 from pathlib import Path
 from threading import RLock
 
+from freqtrade.hedge.errors import HedgeInvariantError
+
 from .common import atomic_write_text, canonical_json, sha256_value
 from .session import RunSession, SessionStatus
 
 
-class StateCorruptionError(RuntimeError):
-    pass
+class StateCorruptionError(HedgeInvariantError):
+    """Persisted operations state violates its checksum or schema invariant."""
 
 
 class AtomicRunStateStore:

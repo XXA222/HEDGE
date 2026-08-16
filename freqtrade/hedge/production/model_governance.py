@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from hashlib import sha256
 import json
+import math
 
 
 class ModelStatus(StrEnum):
@@ -59,6 +60,35 @@ class ApprovalRecord:
     shadow_passed: bool
     fallback_profile: str
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.status, ModelStatus):
+            raise TypeError("model approval status must be ModelStatus")
+        for name in ("walkforward_passed", "recorded_replay_passed", "shadow_passed"):
+            if not isinstance(getattr(self, name), bool):
+                raise TypeError(f"{name} must be bool")
+        if self.approved_at is not None:
+            if not isinstance(self.approved_at, datetime):
+                raise TypeError("approved_at must be datetime when supplied")
+            if self.approved_at.tzinfo is None or self.approved_at.utcoffset() is None:
+                raise ValueError("approved_at must be timezone-aware")
+            approved_at = self.approved_at.astimezone(UTC)
+            if approved_at > datetime.now(UTC):
+                raise ValueError("approved_at cannot be in the future")
+            object.__setattr__(self, "approved_at", approved_at)
+        if self.approved_by is not None:
+            if not isinstance(self.approved_by, str):
+                raise TypeError("approved_by must be str when supplied")
+            if not self.approved_by.strip():
+                raise ValueError("approved_by cannot be blank")
+        if self.status is ModelStatus.APPROVED and (
+            self.approved_at is None or self.approved_by is None
+        ):
+            raise ValueError("approved models require approved_at and approved_by")
+        if not isinstance(self.fallback_profile, str):
+            raise TypeError("fallback_profile must be str")
+        if not self.fallback_profile.strip():
+            raise ValueError("fallback_profile is required")
+
     @property
     def deployable(self) -> bool:
         return (
@@ -81,6 +111,26 @@ class InferenceHealth:
     drift_score: float
     max_latency_ms: float = 100.0
     max_drift_score: float = 0.25
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.finite, bool):
+            raise TypeError("finite must be bool")
+        for name in ("latency_ms", "drift_score", "max_latency_ms", "max_drift_score"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int | float):
+                raise TypeError(f"{name} must be a real number")
+            if not math.isfinite(float(value)) or float(value) < 0:
+                raise ValueError(f"{name} must be finite and nonnegative")
+        if self.max_latency_ms <= 0:
+            raise ValueError("max_latency_ms must be positive")
+        for name in ("feature_schema_sha256", "model_sha256"):
+            raw = getattr(self, name)
+            if not isinstance(raw, str):
+                raise TypeError(f"{name} must be str")
+            value = raw.lower()
+            if len(value) != 64 or any(char not in "0123456789abcdef" for char in value):
+                raise ValueError(f"{name} must be sha256")
+            object.__setattr__(self, name, value)
 
 
 @dataclass(frozen=True, slots=True)

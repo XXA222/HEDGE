@@ -37,6 +37,26 @@ def _level_for_observed_margin_fraction(profile: RiskLevelProfile, fraction: flo
     return len(profile.position_levels) - 1
 
 
+def _observed_margin_over_cap(
+    account: RiskAccountState,
+    *,
+    mark: float,
+    profile: RiskLevelProfile,
+) -> bool:
+    """Detect live margin beyond the representable action-state envelope."""
+
+    if not math.isfinite(mark) or mark <= 0:
+        return True
+    if not math.isfinite(account.equity) or account.equity <= 0:
+        return True
+    cap = profile.position_levels[-1]
+    long_fraction = account.long.notional(mark) / profile.long_leverage / account.equity
+    short_fraction = account.short.notional(mark) / profile.short_leverage / account.equity
+    if not math.isfinite(long_fraction) or not math.isfinite(short_fraction):
+        return True
+    return long_fraction > cap + 1e-12 or short_fraction > cap + 1e-12
+
+
 def _leg_state(
     positions: Iterable[PositionRecord],
     *,
@@ -199,7 +219,8 @@ def context_from_central_projection(
         uncertainty_score=float(uncertainty_score),
         funding_rate=float(funding_rate),
         feature_age_steps=int(feature_age_steps),
-        projection_fresh=projection_fresh,
+        projection_fresh=projection_fresh
+        and not _observed_margin_over_cap(account, mark=mark_value, profile=profile),
         failed_probe_long=int(failed_probe_long),
         failed_probe_short=int(failed_probe_short),
         downside_semideviation=float(downside_semideviation),
@@ -296,7 +317,8 @@ def context_from_runtime_view(
         uncertainty_score=float(uncertainty_score),
         funding_rate=float(funding_rate),
         feature_age_steps=int(feature_age_steps),
-        projection_fresh=_runtime_projection_fresh(view, pair=pair, profile=profile),
+        projection_fresh=_runtime_projection_fresh(view, pair=pair, profile=profile)
+        and not _observed_margin_over_cap(account, mark=mark, profile=profile),
         failed_probe_long=int(failed_probe_long),
         failed_probe_short=int(failed_probe_short),
         downside_semideviation=float(downside_semideviation),

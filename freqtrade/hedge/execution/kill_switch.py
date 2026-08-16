@@ -10,6 +10,8 @@ from enum import StrEnum
 from threading import RLock
 from typing import Any, Protocol
 
+from freqtrade.hedge.errors import HedgeSafetyError
+
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,7 @@ class KillSwitchMode(StrEnum):
     HALTED = "HALTED"
 
 
-class ExecutionHaltedError(RuntimeError):
+class ExecutionHaltedError(HedgeSafetyError):
     pass
 
 

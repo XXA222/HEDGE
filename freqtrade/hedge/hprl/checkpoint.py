@@ -195,7 +195,14 @@ def load_checkpoint(
         raise ValueError(
             f"checkpoint agent class mismatch: saved={saved_class!r}, current={current_class!r}"
         )
-    if int(state.get("schema", 1)) >= 2 and "agent_state" in state:
+    schema = state.get("schema", 1)
+    if isinstance(schema, bool) or not isinstance(schema, int):
+        raise TypeError("checkpoint schema must be an integer")
+    if schema not in {1, 2, 3, 4}:
+        raise ValueError(f"unsupported checkpoint schema: {schema}")
+    if schema >= 2:
+        if "agent_state" not in state or not isinstance(state["agent_state"], Mapping):
+            raise ValueError("checkpoint agent_state is required for schema 2+")
         _load_schema2(state["agent_state"], agent, restore_rng=restore_rng)
     else:
         _load_schema1(state, agent)

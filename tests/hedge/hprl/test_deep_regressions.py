@@ -177,12 +177,12 @@ def test_multisymbol_net_projection_is_hard_bounded() -> None:
     assert torch.all(net <= config.max_abs_net_exposure + 1e-6)
 
 
-def test_projection_sanitizes_policy_nan_but_rejects_corrupt_current() -> None:
+def test_projection_rejects_nonfinite_policy_and_current_tensors() -> None:
     projector = HedgeActionProjector(HPRLActionConfig(max_step_change=1.0))
     current = torch.zeros((1, 1, 2))
-    result = projector.project(torch.tensor([[[float("nan"), float("inf")]]]), current)
-    assert torch.isfinite(result.target).all()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="finite"):
+        projector.project(torch.tensor([[[float("nan"), float("inf")]]]), current)
+    with pytest.raises(ValueError, match="finite"):
         projector.project(torch.zeros_like(current), torch.full_like(current, float("nan")))
 
 

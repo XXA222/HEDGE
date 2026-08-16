@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+import math
 from typing import cast
 
 from .risk_levels import HedgeRiskLevelAction, RiskLevelMapper, RiskLevelProfile
@@ -17,6 +18,7 @@ from .risk_portfolio import RiskAccountState
 
 @dataclass(frozen=True, slots=True)
 class HedgeRiskLevelPlannerSignal:
+    target_equity: float
     long_level: int
     short_level: int
     long_margin_fraction: float
@@ -70,6 +72,8 @@ class HedgeRiskLevelPlannerAdapter:
         current_long_notional: float | None = None,
         current_short_notional: float | None = None,
     ) -> HedgeRiskLevelPlannerSignal:
+        if not math.isfinite(equity) or equity <= 0:
+            raise ValueError("equity must be finite and positive")
         if not projection_fresh:
             action = HedgeRiskLevelAction.from_value((0, 0))
         target = self.mapper.map(action, equity=equity)
@@ -96,6 +100,7 @@ class HedgeRiskLevelPlannerAdapter:
                 short_notional = min(float(cast(float, current_short_notional)), short_notional)
         allow = projection_fresh and (long_increase or short_increase)
         return HedgeRiskLevelPlannerSignal(
+            target_equity=equity,
             long_level=int(action.long_level),
             short_level=int(action.short_level),
             long_margin_fraction=target.long_margin_fraction,
@@ -173,8 +178,9 @@ class HedgeRiskLevelPlannerAdapter:
         short_score = min(1.0, signal.short_margin_fraction / heavy)
         long_notional = signal.long_target_notional
         short_notional = signal.short_target_notional
-        gross = max(long_notional + short_notional, 1e-12)
-        target_net_ratio = (long_notional - short_notional) / gross
+        # ``target_net_ratio`` is a net-notional/equity ratio.  Dividing by gross
+        # notional changes the unit and inflates the target downstream.
+        target_net_ratio = (long_notional - short_notional) / signal.target_equity
         return SignalSnapshot(
             symbol=pair,
             timeframe=timeframe,
@@ -184,6 +190,8 @@ class HedgeRiskLevelPlannerAdapter:
             short_score=Decimal(str(short_score)),
             target_net=None,
             target_net_ratio=Decimal(str(target_net_ratio)),
+            target_long_notional=Decimal(str(long_notional)),
+            target_short_notional=Decimal(str(short_notional)),
             model_version=model_version,
             reason=signal.reason,
             confidence=Decimal(1),

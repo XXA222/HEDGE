@@ -270,11 +270,10 @@ class TieredHedgeActionCodec(nn.Module):
             raise ValueError("raw_action/current_margin must share [..., symbols, 2] shape")
         if raw_action.shape[-1] != 2:
             raise ValueError("final action dimension must be LONG/SHORT")
-        if self.validate_inputs:
-            if not torch.isfinite(raw_action).all() or not torch.isfinite(current_margin).all():
-                raise ValueError("tiered action inputs must be finite")
-            if (current_margin < 0).any():
-                raise ValueError("current_margin cannot be negative")
+        if not torch.isfinite(raw_action).all() or not torch.isfinite(current_margin).all():
+            raise ValueError("tiered action inputs must be finite")
+        if (current_margin < 0).any():
+            raise ValueError("current_margin cannot be negative")
 
         cfg = self.config
         requested_policy = torch.clamp(raw_action, 0.0, 1.0)

@@ -11,11 +11,13 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from threading import RLock
 
+from freqtrade.hedge.errors import HedgeSafetyError
+
 from .binance_environment import ExecutionEnvironment
 from .service import ApprovedOrderIntent, OrderType
 
 
-class ExecutionWriteLockedError(PermissionError):
+class ExecutionWriteLockedError(HedgeSafetyError, PermissionError):
     """Raised before any exchange write when production evidence is incomplete."""
 
 

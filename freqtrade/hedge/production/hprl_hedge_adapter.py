@@ -29,6 +29,7 @@ from freqtrade.hedge.production.model_targets import (
     validate_model_target,
 )
 from freqtrade.hedge.simulation.exchange import SignalEvent
+from freqtrade.hedge.symbols import raw_symbol
 
 if TYPE_CHECKING:  # avoid importing torch or the HPRL package at module-import time
     from freqtrade.hedge.hprl.contracts import PlannedExecutionIntent
@@ -56,6 +57,14 @@ def _aware(value: datetime, *, field: str) -> datetime:
     if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{field} must be timezone-aware")
     return value.astimezone(UTC)
+
+
+def _allowed_new_risk(projection: "HprlTargetProjection", override: bool | None) -> bool:
+    if override is None:
+        return projection.accepted
+    if not isinstance(override, bool):
+        raise TypeError("allow_new_risk override must be bool when supplied")
+    return override and projection.accepted
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,9 +125,19 @@ class HprlHedgeAdapterPolicy:
         if missing:
             raise TypeError("HPRL action config missing: " + ",".join(missing))
         levels = tuple(Decimal(str(x)) for x in getattr(config, "position_levels", ()))
-        max_delta = max((right - left for left, right in zip(levels, levels[1:], strict=False)), default=Decimal("0.15"))
-        increase_levels = int(getattr(config, "max_increase_levels", 1))
-        if increase_levels > 1 and levels:
+        raw_increase_levels = getattr(config, "max_increase_levels", 1)
+        if isinstance(raw_increase_levels, bool) or not isinstance(raw_increase_levels, int):
+            raise TypeError("max_increase_levels must be an integer")
+        increase_levels = raw_increase_levels
+        if increase_levels < 0:
+            raise ValueError("max_increase_levels cannot be negative")
+        max_delta = max(
+            (right - left for left, right in zip(levels, levels[1:], strict=False)),
+            default=Decimal("0.15"),
+        )
+        if increase_levels == 0:
+            max_delta = ZERO
+        elif increase_levels > 1 and levels:
             deltas = []
             for index in range(len(levels)):
                 right = min(len(levels) - 1, index + increase_levels)
@@ -313,6 +332,10 @@ class HprlHedgeAdapter:
         )
         previous_model = None
         if previous is not None:
+            if raw_symbol(previous.symbol) != raw_symbol(intent.symbol):
+                raise ValueError("previous HPRL projection symbol does not match current intent")
+            if previous.model_id != intent.model_id:
+                raise ValueError("previous HPRL projection model_id does not match current intent")
             previous_model = ModelTarget(
                 sequence=previous.sequence,
                 observed_at=previous.observed_at,
@@ -422,7 +445,7 @@ class HprlHedgeAdapter:
         allow_new_risk: bool | None = None,
     ) -> SignalEvent:
         long_scale, short_scale = self._scales(projection)
-        allowed = projection.accepted if allow_new_risk is None else bool(allow_new_risk and projection.accepted)
+        allowed = _allowed_new_risk(projection, allow_new_risk)
         # Confidence is diagnostic here, not a second sizing multiplier.  HPRL already chose
         # the hard tier.  Applying confidence again would silently move the target off-grid.
         return SignalEvent(
@@ -464,7 +487,7 @@ class HprlHedgeAdapter:
         if not timeframe.strip():
             raise ValueError("timeframe cannot be empty")
         long_scale, short_scale = self._scales(projection)
-        allowed = projection.accepted if allow_new_risk is None else bool(allow_new_risk and projection.accepted)
+        allowed = _allowed_new_risk(projection, allow_new_risk)
         return {
             "symbol": projection.symbol,
             "timeframe": timeframe,

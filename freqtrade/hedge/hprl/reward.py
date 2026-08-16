@@ -89,7 +89,7 @@ class CompositeReward:
             raise ValueError("reward fact tensors must share the same shape")
         if tuple(terminal.shape) != base_shape:
             raise ValueError("reward terminal mask must match reward fact shape")
-        if self.validate_inputs and any(not torch.isfinite(value).all() for value in numeric):
+        if any(not torch.isfinite(value).all() for value in numeric):
             raise ValueError("reward facts must be finite")
 
         scale = float(cfg.return_scale)

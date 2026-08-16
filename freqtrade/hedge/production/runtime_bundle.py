@@ -68,8 +68,10 @@ class ProductionRuntimeBundle:
         now: datetime,
         fallback_ready: bool = False,
     ) -> RuntimeSafetySnapshot:
+        if not isinstance(fallback_ready, bool):
+            raise TypeError("fallback_ready must be bool")
         self._model_snapshot = self.model_circuit.observe(decision, now=now)
-        self._fallback_ready = bool(fallback_ready)
+        self._fallback_ready = fallback_ready
         return self._refresh(now)
 
     def open_incident(self, incident, *, now: datetime) -> RuntimeSafetySnapshot:
@@ -101,8 +103,10 @@ class ProductionRuntimeBundle:
         risk_data_fresh: bool,
         now: datetime,
     ) -> RuntimeSafetySnapshot:
-        self._market_data_fresh = bool(market_data_fresh)
-        self._risk_data_fresh = bool(risk_data_fresh)
+        if not isinstance(market_data_fresh, bool) or not isinstance(risk_data_fresh, bool):
+            raise TypeError("market_data_fresh and risk_data_fresh must be bool")
+        self._market_data_fresh = market_data_fresh
+        self._risk_data_fresh = risk_data_fresh
         return self._refresh(now)
 
     def apply_control(

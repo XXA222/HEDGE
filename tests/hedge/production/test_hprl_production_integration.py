@@ -163,6 +163,17 @@ def test_hprl_adapter_derives_production_envelope_from_action_config() -> None:
     assert adapter.policy.max_increase_margin_delta == Decimal("0.15")
 
 
+def test_hprl_zero_tier_increase_forbids_any_scale_in_and_overrides_are_strict() -> None:
+    config = HPRLActionConfig(max_increase_levels=0)
+    policy = HprlHedgeAdapterPolicy.from_hprl_action_config(config)
+    assert policy.max_increase_margin_delta == 0
+    projection = HprlHedgeAdapter(policy).adapt(
+        _intent(0.15, 0), sequence=1, observed_at=NOW, now=NOW
+    )
+    with pytest.raises(TypeError):
+        HprlHedgeAdapter(policy).to_signal_event(projection, allow_new_risk="false")  # type: ignore[arg-type]
+
+
 def test_hprl_adapter_preserves_margin_notional_separation() -> None:
     adapter = _adapter()
     projection = adapter.adapt(_intent(1.2, 0.36), sequence=1, observed_at=NOW, now=NOW)

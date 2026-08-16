@@ -7,16 +7,17 @@ owns no exchange API capability: all writes remain inside ``HedgeExecutionEngine
 """
 from __future__ import annotations
 
+import json
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from hashlib import sha256
-import json
 from pathlib import Path
 from typing import Mapping, Protocol
 
+from freqtrade.hedge.errors import HedgePersistenceError
 from freqtrade.hedge.execution.state_machine import OrderState
 from freqtrade.hedge.integration.production_main_loop import (
     HedgeMainLoopCycle,
@@ -25,8 +26,8 @@ from freqtrade.hedge.integration.production_main_loop import (
 from freqtrade.hedge.planning.context import PlanningContext
 from freqtrade.hedge.symbols import raw_symbol
 
-from .hprl_hedge_adapter import HprlHedgeAdapter, HprlTargetProjection
 from ._file_io import atomic_write_text, exclusive_file_lock
+from .hprl_hedge_adapter import HprlHedgeAdapter, HprlTargetProjection
 from .recovery_checkpoint import DurableRecoveryCheckpoint, RecoveryCheckpointStore
 
 ZERO_HASH = "0" * 64
@@ -45,6 +46,22 @@ def _aware(value: datetime, *, field: str) -> datetime:
     if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{field} must be timezone-aware")
     return value.astimezone(UTC)
+
+
+def _strict_bool(value: object, *, field: str) -> bool:
+    if not isinstance(value, bool):
+        raise TypeError(f"{field} must be bool")
+    return value
+
+
+def _strict_nonnegative_int(value: object, *, field: str, positive: bool = False) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{field} must be an integer")
+    minimum = 1 if positive else 0
+    if value < minimum:
+        qualifier = "positive" if positive else "nonnegative"
+        raise ValueError(f"{field} must be {qualifier}")
+    return value
 
 
 def _digest(payload: object) -> str:
@@ -203,6 +220,8 @@ class ClosedLoopCycleRecord:
     record_sha256: str = field(init=False)
 
     def __post_init__(self) -> None:
+        for name in ("projection_accepted", "safety_allows_reduce", "safety_allows_new_risk"):
+            _strict_bool(getattr(self, name), field=name)
         if self.sequence <= 0:
             raise ValueError("closed-loop sequence must be positive")
         if not self.cycle_id.strip() or not self.source_release.strip() or not self.model_id.strip():
@@ -292,13 +311,15 @@ class ClosedLoopCycleRecord:
     @classmethod
     def from_payload(cls, raw: Mapping[str, object]) -> "ClosedLoopCycleRecord":
         result = cls(
-            sequence=int(raw["sequence"]),
+            sequence=_strict_nonnegative_int(raw["sequence"], field="sequence", positive=True),
             cycle_id=str(raw["cycle_id"]),
             observed_at=datetime.fromisoformat(str(raw["observed_at"])),
             source_release=str(raw["source_release"]),
             model_id=str(raw["model_id"]),
             symbol=str(raw["symbol"]),
-            projection_sequence=int(raw["projection_sequence"]),
+            projection_sequence=_strict_nonnegative_int(
+                raw["projection_sequence"], field="projection_sequence"
+            ),
             projection_observed_at=datetime.fromisoformat(str(raw["projection_observed_at"])),
             projection_source_sha256=str(raw["projection_source_sha256"]),
             projection_semantic_sha256=str(raw["projection_semantic_sha256"]),
@@ -307,7 +328,9 @@ class ClosedLoopCycleRecord:
             long_notional_ratio=Decimal(str(raw["long_notional_ratio"])),
             short_notional_ratio=Decimal(str(raw["short_notional_ratio"])),
             confidence=Decimal(str(raw["confidence"])),
-            projection_accepted=bool(raw["projection_accepted"]),
+            projection_accepted=_strict_bool(
+                raw["projection_accepted"], field="projection_accepted"
+            ),
             projection_reasons=tuple(str(x) for x in raw.get("projection_reasons", [])),
             projection_chain_sha256=str(raw["projection_chain_sha256"]),
             planner_profile_sha256=str(raw["planner_profile_sha256"]),
@@ -316,10 +339,16 @@ class ClosedLoopCycleRecord:
             execution_sha256=str(raw["execution_sha256"]),
             reconciliation_digest=str(raw["reconciliation_digest"]),
             evidence_digest=str(raw["evidence_digest"]),
-            safety_allows_reduce=bool(raw["safety_allows_reduce"]),
-            safety_allows_new_risk=bool(raw["safety_allows_new_risk"]),
+            safety_allows_reduce=_strict_bool(
+                raw["safety_allows_reduce"], field="safety_allows_reduce"
+            ),
+            safety_allows_new_risk=_strict_bool(
+                raw["safety_allows_new_risk"], field="safety_allows_new_risk"
+            ),
             status=ClosedLoopCycleStatus(str(raw["status"])),
-            writes_attempted=int(raw["writes_attempted"]),
+            writes_attempted=_strict_nonnegative_int(
+                raw["writes_attempted"], field="writes_attempted"
+            ),
             unresolved_client_order_ids=tuple(str(x) for x in raw.get("unresolved_client_order_ids", [])),
             previous_record_sha256=str(raw.get("previous_record_sha256", ZERO_HASH)),
         )
@@ -407,8 +436,8 @@ class ClosedLoopCycleJournal:
         return journal
 
 
-class ClosedLoopJournalConcurrencyError(RuntimeError):
-    pass
+class ClosedLoopJournalConcurrencyError(HedgePersistenceError):
+    """A journal compare-and-swap lost to another durable writer."""
 
 
 class ClosedLoopJournalStorePort(Protocol):
@@ -515,6 +544,8 @@ class HprlProductionClosedLoop:
         safety_allows_reduce: bool,
         safety_allows_new_risk: bool,
     ) -> HprlClosedLoopOutcome:
+        _strict_bool(safety_allows_reduce, field="safety_allows_reduce")
+        _strict_bool(safety_allows_new_risk, field="safety_allows_new_risk")
         evidence = _sha(evidence_digest, field="evidence_digest")
         reconciliation = _sha(reconciliation_digest, field="reconciliation_digest")
         current = _aware(now, field="now")
@@ -600,8 +631,8 @@ class HprlProductionClosedLoop:
             execution_sha256=_execution_sha256(main_cycle),
             reconciliation_digest=reconciliation,
             evidence_digest=evidence,
-            safety_allows_reduce=bool(safety_allows_reduce),
-            safety_allows_new_risk=bool(safety_allows_new_risk),
+            safety_allows_reduce=safety_allows_reduce,
+            safety_allows_new_risk=safety_allows_new_risk,
             status=status,
             writes_attempted=writes_attempted,
             unresolved_client_order_ids=unknown,

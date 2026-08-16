@@ -24,6 +24,7 @@ from freqtrade.hedge.control.store import (
     ControlOperationConflict,
     ControlOperationStore,
 )
+from freqtrade.hedge.errors import HedgeSafetyError
 from freqtrade.hedge.execution.action_group import (
     ActionGroupExecutor,
     build_close_both_plan,
@@ -62,12 +63,12 @@ _CONFIRMATION_REQUIRED = frozenset(
 )
 
 
-class ControlPermissionError(PermissionError):
-    pass
+class ControlPermissionError(HedgeSafetyError, PermissionError):
+    """A control request is not authorized for the requested safety action."""
 
 
-class ControlConfirmationError(PermissionError):
-    pass
+class ControlConfirmationError(HedgeSafetyError, PermissionError):
+    """A high-impact control request lacks a valid confirmation."""
 
 
 class HedgeControlService:

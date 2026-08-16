@@ -16,6 +16,16 @@ from .recovery import CrashPoint, RecoveryAction, RecoveryContext, RecoveryPlan,
 ZERO_HASH = "0" * 64
 
 
+def _strict_nonnegative_int(value: object, *, field: str, positive: bool = False) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{field} must be an integer")
+    minimum = 1 if positive else 0
+    if value < minimum:
+        qualifier = "positive" if positive else "nonnegative"
+        raise ValueError(f"{field} must be {qualifier}")
+    return value
+
+
 def _hash(value: object, *, field_name: str, allow_zero: bool = True) -> str:
     result = str(value).lower()
     if len(result) != 64 or any(ch not in "0123456789abcdef" for ch in result):
@@ -108,15 +118,19 @@ class DurableRecoveryCheckpoint:
         if not isinstance(unresolved_raw, list):
             raise ValueError("unresolved_client_order_ids must be a list")
         checkpoint = cls(
-            generation=int(raw["generation"]),
+            generation=_strict_nonnegative_int(raw["generation"], field="generation", positive=True),
             created_at=datetime.fromisoformat(str(raw["created_at"])),
             source_release=str(raw["source_release"]),
             model_id=str(raw["model_id"]),
             evidence_digest=str(raw["evidence_digest"]),
             reconciliation_digest=str(raw["reconciliation_digest"]),
             projection_chain_sha256=str(raw["projection_chain_sha256"]),
-            last_market_sequence=int(raw["last_market_sequence"]),
-            last_user_sequence=int(raw["last_user_sequence"]),
+            last_market_sequence=_strict_nonnegative_int(
+                raw["last_market_sequence"], field="last_market_sequence"
+            ),
+            last_user_sequence=_strict_nonnegative_int(
+                raw["last_user_sequence"], field="last_user_sequence"
+            ),
             unresolved_client_order_ids=tuple(str(item) for item in unresolved_raw),
             metadata=tuple(metadata),
         )

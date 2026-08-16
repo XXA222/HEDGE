@@ -35,8 +35,8 @@ def q_up(value: Decimal, step: Decimal) -> Decimal:
 
 
 def utc_aware(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
+    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("planner timestamps must be timezone-aware")
     return value.astimezone(UTC)
 
 
@@ -567,6 +567,8 @@ class PlanningContext:
     long_signal: Decimal = ZERO
     short_signal: Decimal = ZERO
     target_net_quantity: Decimal | None = None
+    target_long_quantity: Decimal | None = None
+    target_short_quantity: Decimal | None = None
     collect_diagnostics: bool = True
 
     def __post_init__(self) -> None:
@@ -579,12 +581,24 @@ class PlanningContext:
             raise ValueError("strategy signals must be finite")
         if self.target_net_quantity is not None and not self.target_net_quantity.is_finite():
             raise ValueError("target net quantity must be finite when supplied")
+        exact_targets = (self.target_long_quantity, self.target_short_quantity)
+        if (exact_targets[0] is None) != (exact_targets[1] is None):
+            raise ValueError("exact dual-leg quantities must be supplied together")
+        if any(
+            value is not None and (not value.is_finite() or value < ZERO) for value in exact_targets
+        ):
+            raise ValueError("exact dual-leg quantities must be finite and non-negative")
 
     def state(self, side: PositionSide) -> StrategyLegState:
         return self.long_state if side is PositionSide.LONG else self.short_state
 
     def signal(self, side: PositionSide) -> Decimal:
         return self.long_signal if side is PositionSide.LONG else self.short_signal
+
+    def target_quantity(self, side: PositionSide) -> Decimal | None:
+        return (
+            self.target_long_quantity if side is PositionSide.LONG else self.target_short_quantity
+        )
 
     def with_state_trusted(
         self,

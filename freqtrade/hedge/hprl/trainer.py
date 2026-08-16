@@ -77,11 +77,10 @@ class DiscountedReturnNormalizer:
         done_flat = done.to(self.device, dtype=torch.float32, non_blocking=True).reshape(-1)
         if reward_flat.numel() != self.num_envs or done_flat.numel() != self.num_envs:
             raise ValueError("reward/done must contain one value per vector environment")
-        if self.validate_inputs:
-            if not torch.isfinite(reward_flat).all() or not torch.isfinite(done_flat).all():
-                raise ValueError("reward/done normalization inputs must be finite")
-            if not bool(((done_flat == 0.0) | (done_flat == 1.0)).all()):
-                raise ValueError("done normalization input must be boolean-like 0/1")
+        if not torch.isfinite(reward_flat).all() or not torch.isfinite(done_flat).all():
+            raise ValueError("reward/done normalization inputs must be finite")
+        if not bool(((done_flat == 0.0) | (done_flat == 1.0)).all()):
+            raise ValueError("done normalization input must be boolean-like 0/1")
 
         self.discounted_return.mul_(self.gamma * (1.0 - done_flat)).add_(reward_flat)
         values = self.discounted_return.detach()

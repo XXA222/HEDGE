@@ -8,10 +8,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from freqtrade.hedge.errors import HedgeSafetyError
+
 from .config import DeploymentMode, HedgeDeploymentConfig
 
 
-class DeploymentReadinessError(RuntimeError):
+class DeploymentReadinessError(HedgeSafetyError):
     pass
 
 

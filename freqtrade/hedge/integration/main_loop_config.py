@@ -84,6 +84,10 @@ class ProductionMainLoopConfig:
             raise OperationalException(
                 "hedge.main_loop.state_backend must be sql, json, or memory."
             )
+        if mode is HedgeExecutionMode.HEDGE_PRODUCTION_ARMED and backend == "memory":
+            raise OperationalException(
+                "HEDGE_PRODUCTION_ARMED requires a durable sql or json state backend."
+            )
         if backend == "json" and not str(self.state_path or "").strip():
             raise OperationalException(
                 "hedge.main_loop.state_path is required for the json backend."

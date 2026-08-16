@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import time
 import urllib.error
 import urllib.request
@@ -21,6 +22,7 @@ from threading import RLock
 from typing import Any, Protocol
 from urllib.parse import urlencode, urlsplit
 
+from freqtrade.hedge.errors import HedgeIntegrationError
 from freqtrade.hedge.exchange.shared_rate_limit import SqliteSharedWeightBudget
 
 from .binance_environment import (
@@ -44,7 +46,7 @@ from .service import (
     OrderType,
     PositionSide,
 )
-from .state_machine import OrderState, TERMINAL_STATES
+from .state_machine import TERMINAL_STATES, OrderState
 
 
 _MAX_RESPONSE_BYTES = 8 * 1024 * 1024
@@ -164,7 +166,7 @@ class BinanceTestOrderValidation:
     validated_at: datetime
 
 
-class BinanceExecutionApiError(RuntimeError):
+class BinanceExecutionApiError(HedgeIntegrationError):
     def __init__(
         self,
         message: str,
@@ -195,7 +197,9 @@ class BinanceUSDMExecutionAdapter(ExchangeExecutionPort):
         transport: HttpTransport | None = None,
         now_ms: Callable[[], int] | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
         shared_weight_budget: SqliteSharedWeightBudget | None = None,
+        shared_weight_wait_timeout_seconds: float | None = None,
     ) -> None:
         if not isinstance(credentials, BinanceExecutionCredentials):
             raise TypeError("credentials must be BinanceExecutionCredentials")
@@ -205,6 +209,17 @@ class BinanceUSDMExecutionAdapter(ExchangeExecutionPort):
             raise TypeError("store must implement ExecutionStorePort")
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if isinstance(shared_weight_wait_timeout_seconds, bool):
+            raise TypeError("shared_weight_wait_timeout_seconds must be a real number")
+        shared_wait_timeout = (
+            float(timeout_seconds)
+            if shared_weight_wait_timeout_seconds is None
+            else float(shared_weight_wait_timeout_seconds)
+        )
+        if not math.isfinite(shared_wait_timeout) or shared_wait_timeout <= 0:
+            raise ValueError("shared_weight_wait_timeout_seconds must be finite and positive")
+        if not callable(monotonic):
+            raise TypeError("monotonic must be callable")
         if not isinstance(recv_window_ms, int) or not 1000 <= recv_window_ms <= 5000:
             raise ValueError("recv_window_ms must be in [1000, 5000]")
         evidence = gate.evidence
@@ -223,7 +238,9 @@ class BinanceUSDMExecutionAdapter(ExchangeExecutionPort):
         self._transport = transport or UrlLibHttpTransport(proxy_url=proxy_url)
         self._now_ms = now_ms or (lambda: time.time_ns() // 1_000_000)
         self._sleep = sleep
+        self._monotonic = monotonic
         self._shared_weight_budget = shared_weight_budget
+        self._shared_weight_wait_timeout = shared_wait_timeout
         self._clock_offset_ms = 0
         self._lock = RLock()
         self._logical_requests = 0
@@ -518,11 +535,25 @@ class BinanceUSDMExecutionAdapter(ExchangeExecutionPort):
         if self._shared_weight_budget is None:
             return
         weight = self._endpoint_weight(path)
+        started = float(self._monotonic())
+        if not math.isfinite(started):
+            raise BinanceExecutionApiError("monotonic clock returned a non-finite value")
+        deadline = started + self._shared_weight_wait_timeout
         while True:
             decision = self._shared_weight_budget.reserve_weight(weight)
             if decision.granted:
                 return
-            self._sleep(decision.retry_after_seconds)
+            current = float(self._monotonic())
+            if not math.isfinite(current):
+                raise BinanceExecutionApiError("monotonic clock returned a non-finite value")
+            remaining = deadline - current
+            if remaining <= 0:
+                raise BinanceExecutionApiError("shared Binance rate-budget wait deadline exceeded")
+            retry_after = float(decision.retry_after_seconds)
+            if not math.isfinite(retry_after):
+                raise BinanceExecutionApiError("shared Binance rate budget returned invalid delay")
+            delay = min(max(retry_after, 0.01), remaining)
+            self._sleep(delay)
 
     def _perform(
         self,
@@ -726,13 +757,20 @@ def _average_price(payload: Mapping[str, Any], filled: Decimal) -> Decimal | Non
 
 
 def _timestamp(value: object) -> datetime:
-    try:
-        millis = int(str(value))
-    except (TypeError, ValueError):
-        return datetime.now(UTC)
+    if isinstance(value, bool):
+        raise BinanceExecutionApiError("Binance timestamp must be an integer")
+    if isinstance(value, int):
+        millis = value
+    elif isinstance(value, str) and value.strip().isdigit():
+        millis = int(value.strip())
+    else:
+        raise BinanceExecutionApiError("Binance timestamp must be an integer")
     if millis <= 0:
-        return datetime.now(UTC)
-    return datetime.fromtimestamp(millis / 1000, tz=UTC)
+        raise BinanceExecutionApiError("Binance timestamp must be positive")
+    try:
+        return datetime.fromtimestamp(millis / 1000, tz=UTC)
+    except (OSError, OverflowError, ValueError) as exc:
+        raise BinanceExecutionApiError("Binance timestamp is out of range") from exc
 
 
 def _decode_json(payload: bytes) -> Any:

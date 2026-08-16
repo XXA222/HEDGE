@@ -266,6 +266,8 @@ class ProductionEquivalentHedgeMainLoop:
         strategy_allows_new_risk: bool = True,
         cycle_id_override: str | None = None,
     ) -> HedgeMainLoopCycle:
+        if not isinstance(strategy_allows_new_risk, bool):
+            raise TypeError("strategy_allows_new_risk must be bool")
         symbol = raw_symbol(context.market.symbol)
         if symbol not in self.allowed_symbols:
             raise ValueError(f"symbol is not in the production perpetual allowlist: {symbol}")

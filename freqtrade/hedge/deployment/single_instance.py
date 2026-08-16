@@ -12,11 +12,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import BinaryIO
 
+from freqtrade.hedge.errors import HedgeStateError
+
 
 logger = logging.getLogger(__name__)
 
 
-class InstanceLockError(RuntimeError):
+class InstanceLockError(HedgeStateError):
     """Raised when another supervisor already owns the instance lock."""
 
 

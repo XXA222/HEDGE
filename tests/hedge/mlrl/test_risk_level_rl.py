@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+from datetime import UTC, datetime
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
@@ -21,6 +23,15 @@ from freqtrade.freqai.hedge_rl.risk_observation import (
 from freqtrade.freqai.hedge_rl.risk_planner_adapter import HedgeRiskLevelPlannerAdapter
 from freqtrade.freqai.hedge_rl.risk_portfolio import RiskAccountState, TargetLevelPortfolioSimulator
 from freqtrade.freqai.hedge_rl.risk_reward import HedgeRiskRewardModel, RiskRewardConfig
+from freqtrade.hedge.planning.context import (
+    LegPosition,
+    MarketSnapshot,
+    PlannerConfig,
+    PlanningContext,
+    PositionSide,
+    WalletSnapshot,
+)
+from freqtrade.hedge.planning.target import calculate_target
 
 
 def _sim(*, fee_rate=0, slippage_bps=0):
@@ -360,6 +371,61 @@ def test_planner_adapter_emits_target_exposure_not_orders():
     assert signal.long_target_notional == pytest.approx(750)
     assert signal.short_target_notional == pytest.approx(150)
     assert "order" not in " ".join(signal.strategy_columns().keys()).lower()
+
+
+def test_risk_level_snapshot_preserves_equity_unit_and_exact_dual_leg_targets():
+    adapter = HedgeRiskLevelPlannerAdapter(RiskLevelProfile(long_leverage=3, short_leverage=3))
+    signal = adapter.from_action(HedgeRiskLevelAction.from_value((3, 1)), equity=1000)
+    now = datetime(2026, 8, 17, tzinfo=UTC)
+    snapshot = adapter.to_signal_snapshot(
+        signal,
+        pair="BTC/USDT:USDT",
+        timeframe="1m",
+        candle_close_time=now,
+        feature_timestamp=now,
+        model_version="test",
+    )
+    assert snapshot.target_net_ratio == Decimal("0.6")
+    assert snapshot.target_long_notional == Decimal("750.0")
+    assert snapshot.target_short_notional == Decimal("150.0")
+
+    market = MarketSnapshot(
+        symbol="BTC/USDT:USDT",
+        timestamp=now,
+        bid=Decimal("99"),
+        ask=Decimal("101"),
+        mark=Decimal("100"),
+        qty_step=Decimal("0.01"),
+    )
+    wallet = WalletSnapshot(
+        balance=Decimal("1000"),
+        equity=Decimal("1000"),
+        available_balance=Decimal("1000"),
+        long=LegPosition(PositionSide.LONG),
+        short=LegPosition(PositionSide.SHORT),
+    )
+    config = PlannerConfig(
+        max_wallet_exposure_long=Decimal("0.8"),
+        max_wallet_exposure_short=Decimal("0.8"),
+        max_gross_wallet_exposure=Decimal("1"),
+    )
+    context = PlanningContext(
+        market=market,
+        wallet=wallet,
+        config=config,
+        target_long_quantity=snapshot.target_long_notional / market.mark,
+        target_short_quantity=snapshot.target_short_notional / market.mark,
+    )
+    assert calculate_target(context, PositionSide.LONG).total_quantity == Decimal("7.50")
+    assert calculate_target(context, PositionSide.SHORT).total_quantity == Decimal("1.50")
+
+
+def test_reward_nonfinite_values_fail_closed():
+    model = HedgeRiskRewardModel(RiskRewardConfig(reward_clip=5))
+    assert model._safe_log_return(float("nan"), 1000) == -1.0
+    assert model._safe_log_return(1000, float("inf")) == -1.0
+    assert model._transform_reward(float("nan")) == -5.0
+    assert model._transform_reward(float("inf")) == -5.0
 
 
 def _market(rows=40):

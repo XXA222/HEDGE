@@ -23,6 +23,17 @@ class RuntimeSafetyInput:
     model_circuit: ModelCircuitSnapshot | None = None
     deterministic_fallback_ready: bool = False
 
+    def __post_init__(self) -> None:
+        for name in (
+            "incident_blocks_new_risk",
+            "incident_blocks_account",
+            "market_data_fresh",
+            "risk_data_fresh",
+            "deterministic_fallback_ready",
+        ):
+            if not isinstance(getattr(self, name), bool):
+                raise TypeError(f"{name} must be bool")
+
 
 @dataclass(frozen=True, slots=True)
 class RuntimeSafetySnapshot:
