@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from hashlib import sha256
 import json
+from pathlib import Path
 
 from freqtrade.hedge.contracts import IntentAction, PositionSide, finite_decimal
 from freqtrade.hedge.contracts.types import required_text
@@ -96,6 +97,29 @@ class TraceCorpus:
         if tuple(state.sequence for state in states) != tuple(range(len(states))):
             raise ValueError("trace sequence must be contiguous from zero")
         object.__setattr__(self, "states", states)
+
+    @classmethod
+    def from_json_file(cls, path: str | Path) -> "TraceCorpus":
+        """Load a versioned, content-addressed recorded trace without network access."""
+        raw = Path(path).read_bytes()
+        payload = json.loads(raw.decode("utf-8"))
+        if not isinstance(payload, dict) or not isinstance(payload.get("states"), list):
+            raise ValueError("trace corpus must contain a states list")
+        digest = sha256(raw).hexdigest()
+        rows = []
+        for row in payload["states"]:
+            if not isinstance(row, dict):
+                raise ValueError("trace state must be object")
+            item = dict(row)
+            item["observed_at"] = datetime.fromisoformat(str(item["observed_at"]))
+            for name in ("fill_quantity", "fill_price", "fee", "funding", "wallet_balance", "equity", "gross_notional", "net_notional", "liquidation_buffer", "long_quantity", "short_quantity"):
+                if item.get(name) is not None:
+                    item[name] = Decimal(str(item[name]))
+            item["position_side"] = PositionSide(item["position_side"])
+            item["action"] = IntentAction(item["action"])
+            item["pending_order_ids"] = tuple(item.get("pending_order_ids", ()))
+            rows.append(ExecutionTraceState(**item))
+        return cls(str(payload.get("schema_version", "")), digest, tuple(rows))
 
 
 @dataclass(frozen=True, slots=True)

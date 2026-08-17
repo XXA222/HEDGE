@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
+import json
 
 from freqtrade.hedge.contracts import IntentAction, PositionSide
 from freqtrade.hedge.simulation.calibration import (
@@ -45,3 +46,22 @@ def test_any_state_divergence_fails_closed_and_records_pnl_error() -> None:
     artifact = _calibrate(recorded, simulated)
     assert not artifact.passed
     assert artifact.max_pnl_error == Decimal(1)
+
+
+def test_recorded_json_trace_is_content_addressed(tmp_path) -> None:
+    payload = {
+        "schema_version": "binance-hedge-v1",
+        "states": [{
+            "sequence": 0, "client_order_id": "cid-1", "observed_at": "2026-08-17T00:00:00+00:00",
+            "position_side": "LONG", "action": "OPEN", "accepted": True,
+            "fill_quantity": "1", "fill_price": "100", "fee": "0.04", "funding": "0",
+            "wallet_balance": "900", "equity": "1000", "gross_notional": "100",
+            "net_notional": "100", "pending_order_ids": [], "liquidation_buffer": "0.5",
+            "long_quantity": "1", "short_quantity": "0",
+        }],
+    }
+    path = tmp_path / "trace.json"
+    path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    trace = TraceCorpus.from_json_file(path)
+    assert trace.states[0].position_side is PositionSide.LONG
+    assert len(trace.corpus_sha256) == 64

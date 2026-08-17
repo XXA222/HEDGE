@@ -1,8 +1,8 @@
 {
   "schema": "freqtrade-hedge-clean-mainline-manifest-v1",
   "version": "freqtrade-hedge-clean-mainline-v1.7-risklevel-rl-dual-runtime-final-closure-risklevel-wf-2y-r4.7-hprl-v2.5.2-local-merge-20260816",
-  "file_count": 1693,
-  "total_bytes": 68161684,
+  "file_count": 1697,
+  "total_bytes": 68172099,
   "files": [
     {
       "path": ".coveragerc",
@@ -4060,6 +4060,11 @@
       "sha256": "2cc95d78efffe991f892025a96439429d12538f04ae9ff371e7244797b5a2619"
     },
     {
+      "path": "freqtrade/hedge/research/evidence_dag.py",
+      "size": 3417,
+      "sha256": "cfd48b619c6179f08df9a9f04e0646f4efe8e8b6378681c1deea01fbfc6697df"
+    },
+    {
       "path": "freqtrade/hedge/research/execution.py",
       "size": 46906,
       "sha256": "c26107ff48cd92e8b04f0f740c5047ff27f7c955ebac867f4f5e33012c6785ef"
@@ -4078,6 +4083,11 @@
       "path": "freqtrade/hedge/research/ml.py",
       "size": 9243,
       "sha256": "5e0578b34fa162e07252ad3cd46a0cf1a6b7eb44a96335608bb7eaeba3c6d70a"
+    },
+    {
+      "path": "freqtrade/hedge/research/ope.py",
+      "size": 2729,
+      "sha256": "d433832a218fe6c3af3dc42f2149356cb98e0c511390c5dce674216d4c7014a7"
     },
     {
       "path": "freqtrade/hedge/research/optimization.py",
@@ -4231,8 +4241,8 @@
     },
     {
       "path": "freqtrade/hedge/simulation/calibration.py",
-      "size": 7766,
-      "sha256": "8bd0e0a5032fd379e0f265e9f34b9379ef88d3b041cb4b2bbbb4e0877d1b2c1f"
+      "size": 9168,
+      "sha256": "13a0bf73c272fc249976028eef5072af0e1159501d8effd6cfe21f74d5945619"
     },
     {
       "path": "freqtrade/hedge/simulation/cross_wallet.py",
@@ -7375,9 +7385,19 @@
       "sha256": "85cd60bf7ce74e64496db6b18d5f466a8c85f42ec496309af54db8d3856f68b0"
     },
     {
+      "path": "tests/hedge/test_evidence_dag.py",
+      "size": 1058,
+      "sha256": "33ae093a154bed0270fa95a60cacf34bfbee61c64a052645d4b858b09671149e"
+    },
+    {
       "path": "tests/hedge/test_numeric_symbols.py",
       "size": 1068,
       "sha256": "5a4d13d5d54627a1916d82311538c67608ef882b93101ef3a0b2c662ba3adc16"
+    },
+    {
+      "path": "tests/hedge/test_ope_qualification.py",
+      "size": 882,
+      "sha256": "52e87b49829efc71e51094826afec9d5a844103d34b5ef626716483c1eabba25"
     },
     {
       "path": "tests/hedge/test_patch_integrity.py",
@@ -7421,8 +7441,8 @@
     },
     {
       "path": "tests/hedge/test_simulation_calibration.py",
-      "size": 1922,
-      "sha256": "4b8df7cc3c56e06343625c20f44e511ddd3a4f9504d0f072742026b8a85409c8"
+      "size": 2849,
+      "sha256": "321f34c9dd3ae4aca9dfc7a83150367704502424b19b33e2a433a319e8955e2b"
     },
     {
       "path": "tests/hedge/test_validate_cli.py",
