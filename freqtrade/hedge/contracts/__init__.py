@@ -57,6 +57,7 @@ from .types import (
     expected_order_side,
     finite_decimal,
 )
+from .policy_target import PolicySourceKind, PolicyTarget
 from .version import (
     CONTRACTS_VERSION,
     EVENT_VERSION,
@@ -107,6 +108,8 @@ __all__ = [
     "PositionRepository",
     "PositionSide",
     "PositionSnapshot",
+    "PolicySourceKind",
+    "PolicyTarget",
     "ReadinessDecision",
     "ReadinessGatePort",
     "ReadinessState",

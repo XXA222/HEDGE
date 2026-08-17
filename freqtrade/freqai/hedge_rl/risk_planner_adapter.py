@@ -13,6 +13,7 @@ import math
 from typing import cast
 
 from .risk_levels import HedgeRiskLevelAction, RiskLevelMapper, RiskLevelProfile
+from .risk_action_mask import RiskLevelActionMasker, RiskLevelJointActionMask, RiskLevelMaskContext
 from .risk_portfolio import RiskAccountState
 
 
@@ -34,6 +35,8 @@ class HedgeRiskLevelPlannerSignal:
     target_semantics: str
     allow_new_risk: bool
     reason: str
+    requested_joint_id: int = 0
+    action_mask_allowed_count: int = 25
 
     def strategy_columns(self) -> dict[str, float | int | bool | str]:
         return {
@@ -52,6 +55,8 @@ class HedgeRiskLevelPlannerSignal:
             "hedge_rl_target_semantics": self.target_semantics,
             "hedge_allow_new_risk": self.allow_new_risk,
             "hedge_rl_reason": self.reason,
+            "hedge_rl_requested_joint_id": self.requested_joint_id,
+            "hedge_rl_action_mask_allowed_count": self.action_mask_allowed_count,
         }
 
 
@@ -59,6 +64,7 @@ class HedgeRiskLevelPlannerAdapter:
     def __init__(self, profile: RiskLevelProfile) -> None:
         self.profile = profile
         self.mapper = RiskLevelMapper(profile)
+        self.masker = RiskLevelActionMasker(profile)
         self._action_signature = profile.signature
 
     def _signal(
@@ -71,6 +77,9 @@ class HedgeRiskLevelPlannerAdapter:
         current_short_level: int | None = None,
         current_long_notional: float | None = None,
         current_short_notional: float | None = None,
+        requested_joint_id: int | None = None,
+        mask_allowed_count: int = 25,
+        masked_reason: str | None = None,
     ) -> HedgeRiskLevelPlannerSignal:
         if not math.isfinite(equity) or equity <= 0:
             raise ValueError("equity must be finite and positive")
@@ -115,7 +124,12 @@ class HedgeRiskLevelPlannerAdapter:
             short_increase_allowed=short_increase,
             target_semantics="RISK_CAP_NO_SAME_LEVEL_SCALE_IN",
             allow_new_risk=allow,
-            reason=f"HEDGE_RL_RISK_LEVEL:L{int(action.long_level)}:S{int(action.short_level)}",
+            reason=(
+                f"HEDGE_RL_RISK_LEVEL:L{int(action.long_level)}:S{int(action.short_level)}"
+                + (f":MASKED:{masked_reason}" if masked_reason else "")
+            ),
+            requested_joint_id=action.joint_id if requested_joint_id is None else requested_joint_id,
+            action_mask_allowed_count=mask_allowed_count,
         )
 
     def from_action(
@@ -141,6 +155,12 @@ class HedgeRiskLevelPlannerAdapter:
         account: RiskAccountState,
         mark: float,
         projection_fresh: bool = True,
+        unresolved_unknown: bool = False,
+        reconciliation_required: bool = False,
+        model_degraded: bool = False,
+        reduce_only: bool = False,
+        margin_stressed: bool = False,
+        max_upward_levels: int = 1,
     ) -> HedgeRiskLevelPlannerSignal:
         """Canonical state-aware target mapping for dry-run/live planners.
 
@@ -149,15 +169,57 @@ class HedgeRiskLevelPlannerAdapter:
         preventing equity/price drift from silently averaging down.
         """
 
+        requested = HedgeRiskLevelAction.from_value(action)
+        mask = self.action_mask(
+            account=account,
+            projection_fresh=projection_fresh,
+            unresolved_unknown=unresolved_unknown,
+            reconciliation_required=reconciliation_required,
+            model_degraded=model_degraded,
+            reduce_only=reduce_only,
+            margin_stressed=margin_stressed,
+            max_upward_levels=max_upward_levels,
+        )
+        selected = requested
+        masked_reason = mask.reason_for(requested)
+        if not mask.permits(requested):
+            current = HedgeRiskLevelAction.from_value((account.long_level, account.short_level))
+            selected = current if mask.permits(current) else HedgeRiskLevelAction.from_value((0, 0))
         return self._signal(
-            action,
+            selected,
             equity=account.equity,
             projection_fresh=projection_fresh,
             current_long_level=account.long_level,
             current_short_level=account.short_level,
             current_long_notional=account.long.notional(mark),
             current_short_notional=account.short.notional(mark),
+            requested_joint_id=requested.joint_id,
+            mask_allowed_count=len(mask.allowed_joint_ids),
+            masked_reason=masked_reason,
         )
+
+    def action_mask(
+        self,
+        *,
+        account: RiskAccountState,
+        projection_fresh: bool = True,
+        unresolved_unknown: bool = False,
+        reconciliation_required: bool = False,
+        model_degraded: bool = False,
+        reduce_only: bool = False,
+        margin_stressed: bool = False,
+        max_upward_levels: int = 1,
+    ) -> RiskLevelJointActionMask:
+        return self.masker.build(RiskLevelMaskContext(
+            current_action=HedgeRiskLevelAction.from_value((account.long_level, account.short_level)),
+            projection_fresh=projection_fresh,
+            unresolved_unknown=unresolved_unknown,
+            reconciliation_required=reconciliation_required,
+            model_degraded=model_degraded,
+            reduce_only=reduce_only,
+            margin_stressed=margin_stressed,
+            max_upward_levels=max_upward_levels,
+        ))
 
     def to_signal_snapshot(
         self,

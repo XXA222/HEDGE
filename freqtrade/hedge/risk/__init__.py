@@ -35,6 +35,7 @@ from freqtrade.hedge.risk.models import (
     RiskRequest,
     risk_decision_as_dict,
 )
+from freqtrade.hedge.risk.policy_identity import RiskPolicyIdentity, canonical_sha256
 from freqtrade.hedge.risk.portfolio import (
     PositionRiskLeg,
     RiskPortfolioSnapshot,
@@ -73,6 +74,7 @@ __all__ = [
     "RiskEvent",
     "RiskLimits",
     "RiskMode",
+    "RiskPolicyIdentity",
     "RiskPositionKey",
     "RiskPortfolioSnapshot",
     "RiskRequest",
@@ -86,4 +88,5 @@ __all__ = [
     "calculate_projected_maintenance_buffer",
     "minimum_liquidation_buffer",
     "risk_decision_as_dict",
+    "canonical_sha256",
 ]

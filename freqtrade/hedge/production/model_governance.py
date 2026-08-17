@@ -25,6 +25,7 @@ class ModelIdentity:
     data_manifest_sha256: str
     training_config_sha256: str
     framework_fingerprint: str
+    source_authority_sha256: str | None = None
 
     def __post_init__(self) -> None:
         if not self.model_id.strip() or not self.algorithm.strip():
@@ -34,6 +35,11 @@ class ModelIdentity:
             if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
                 raise ValueError(f"{name} must be sha256")
             object.__setattr__(self, name, value)
+        if self.source_authority_sha256 is not None:
+            value = self.source_authority_sha256.lower()
+            if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
+                raise ValueError("source_authority_sha256 must be sha256 when supplied")
+            object.__setattr__(self, "source_authority_sha256", value)
 
     @property
     def fingerprint(self) -> str:
@@ -45,6 +51,7 @@ class ModelIdentity:
             "data_manifest_sha256": self.data_manifest_sha256,
             "training_config_sha256": self.training_config_sha256,
             "framework_fingerprint": self.framework_fingerprint,
+            "source_authority_sha256": self.source_authority_sha256,
         }, sort_keys=True, separators=(",", ":")).encode()
         return sha256(payload).hexdigest()
 
@@ -99,6 +106,24 @@ class ApprovalRecord:
             and self.recorded_replay_passed
             and self.shadow_passed
             and bool(self.fallback_profile.strip())
+        )
+
+    def promotable_from(self, source_authority) -> bool:
+        """Return whether an approved model is bound to the current clean source.
+
+        ``deployable`` deliberately remains the backward-compatible model-health
+        predicate.  Promotion additionally requires an explicit, promotable source
+        identity so legacy models without provenance cannot silently enter live use.
+        """
+
+        from .source_authority import SourceAuthority
+
+        if not isinstance(source_authority, SourceAuthority):
+            raise TypeError("source_authority must be SourceAuthority")
+        return (
+            self.deployable
+            and source_authority.promotable
+            and self.identity.source_authority_sha256 == source_authority.identity_sha256
         )
 
 

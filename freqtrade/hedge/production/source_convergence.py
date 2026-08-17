@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 
+from .source_authority import SourceAuthority, discover_source_authority
+
 
 @dataclass(frozen=True, slots=True)
 class CanonicalSourceSnapshot:
@@ -38,6 +40,7 @@ class CanonicalSourceSnapshot:
     workspace_missing_files: tuple[str, ...]
     workspace_unexpected_files: tuple[str, ...]
     workspace_mismatched_files: tuple[str, ...]
+    source_authority: SourceAuthority | None = None
 
     @property
     def passed(self) -> bool:
@@ -199,7 +202,7 @@ def build_canonical_source_snapshot(
     root: str | Path,
     *,
     github_baseline_repository: str = "XXA222/HEDGE",
-    github_baseline_commit: str = "62bfbc6acf4b1ff87b71bf4212a3488fddd72c67",
+    github_baseline_commit: str | None = None,
 ) -> CanonicalSourceSnapshot:
     root_path = Path(root).resolve()
     missing = tuple(path for path in _REQUIRED if not (root_path / path).is_file())
@@ -263,6 +266,11 @@ def build_canonical_source_snapshot(
     manifest_matches = not (missing_from_workspace or unexpected_in_workspace or mismatched)
     hprl_init = root_path / "freqtrade/hedge/hprl/__init__.py"
     prod_init = root_path / "freqtrade/hedge/production/__init__.py"
+    authority = discover_source_authority(
+        root_path,
+        repository=github_baseline_repository,
+        release_id=str(payload.get("version", "HEDGE")),
+    )
     return CanonicalSourceSnapshot(
         manifest_schema=str(payload.get("schema", "")),
         manifest_version=str(payload.get("version", "")),
@@ -276,7 +284,7 @@ def build_canonical_source_snapshot(
         closed_loop_api_version=_module_constant(prod_init, "HPRL_V3_CLOSED_LOOP_API_VERSION"),
         closed_loop_release=_module_constant(prod_init, "HPRL_V3_CLOSED_LOOP_RELEASE"),
         github_baseline_repository=github_baseline_repository,
-        github_baseline_commit=github_baseline_commit,
+        github_baseline_commit=github_baseline_commit or authority.commit_sha or "UNAVAILABLE",
         required_paths_present=not missing,
         manifest_matches_workspace=manifest_matches,
         missing_paths=missing,
@@ -292,4 +300,5 @@ def build_canonical_source_snapshot(
         workspace_missing_files=workspace_missing,
         workspace_unexpected_files=workspace_unexpected,
         workspace_mismatched_files=workspace_mismatched,
+        source_authority=authority,
     )

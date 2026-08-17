@@ -18,6 +18,7 @@ from freqtrade.hedge.numeric import ZERO
 class ReservationState(StrEnum):
     HELD = "HELD"
     COMMITTED = "COMMITTED"
+    UNKNOWN = "UNKNOWN"
     RELEASED = "RELEASED"
     EXPIRED = "EXPIRED"
 
@@ -93,7 +94,9 @@ class ExposureReservationBook:
                 existing = self._items[existing_id]
                 if existing.notional != notional:
                     raise ValueError("idempotent reservation notional mismatch")
-                if existing.state in {ReservationState.HELD, ReservationState.COMMITTED}:
+                if existing.state in {
+                    ReservationState.HELD, ReservationState.COMMITTED, ReservationState.UNKNOWN,
+                }:
                     return existing
                 # A clientOrderId is an execution idempotency identity.  Once its
                 # reservation reaches a terminal state it must never be recycled for
@@ -102,7 +105,9 @@ class ExposureReservationBook:
             active = [
                 x
                 for x in self._items.values()
-                if x.state in {ReservationState.HELD, ReservationState.COMMITTED}
+                if x.state in {
+                    ReservationState.HELD, ReservationState.COMMITTED, ReservationState.UNKNOWN,
+                }
             ]
             if len(active) + 1 > max_orders:
                 raise PermissionError("CANARY_RESERVATION_ORDER_LIMIT")
@@ -121,6 +126,31 @@ class ExposureReservationBook:
     def release(self, reservation_id: str, *, now: datetime) -> ExposureReservation:
         return self._transition(reservation_id, ReservationState.RELEASED, now=now)
 
+    def mark_unknown(self, reservation_id: str, *, now: datetime) -> ExposureReservation:
+        """Retain capacity when exchange outcome is indeterminate.
+
+        Timeout/transport ambiguity is not proof that an order failed.  UNKNOWN
+        reservations deliberately do not expire and therefore cannot be replaced by a
+        duplicate risk-increasing order before reconciliation resolves the outcome.
+        """
+
+        return self._transition(reservation_id, ReservationState.UNKNOWN, now=now)
+
+    def resolve_unknown(
+        self,
+        reservation_id: str,
+        *,
+        accepted: bool,
+        now: datetime,
+    ) -> ExposureReservation:
+        if not isinstance(accepted, bool):
+            raise TypeError("accepted must be bool")
+        return self._transition(
+            reservation_id,
+            ReservationState.COMMITTED if accepted else ReservationState.RELEASED,
+            now=now,
+        )
+
     def expire(self, *, now: datetime) -> tuple[ExposureReservation, ...]:
         if now.tzinfo is None:
             raise ValueError("now must be timezone-aware")
@@ -136,7 +166,9 @@ class ExposureReservationBook:
                 (
                     x
                     for x in self._items.values()
-                    if x.state in {ReservationState.HELD, ReservationState.COMMITTED}
+                    if x.state in {
+                        ReservationState.HELD, ReservationState.COMMITTED, ReservationState.UNKNOWN,
+                    }
                 ),
                 key=lambda x: x.reservation_id,
             ))
@@ -164,8 +196,11 @@ class ExposureReservationBook:
             if current.state is state:
                 return current
             allowed = {
-                ReservationState.HELD: {ReservationState.COMMITTED, ReservationState.RELEASED},
-                ReservationState.COMMITTED: {ReservationState.RELEASED},
+                ReservationState.HELD: {
+                    ReservationState.COMMITTED, ReservationState.UNKNOWN, ReservationState.RELEASED,
+                },
+                ReservationState.COMMITTED: {ReservationState.UNKNOWN, ReservationState.RELEASED},
+                ReservationState.UNKNOWN: {ReservationState.COMMITTED, ReservationState.RELEASED},
             }
             if state not in allowed.get(current.state, set()):
                 raise ValueError(
