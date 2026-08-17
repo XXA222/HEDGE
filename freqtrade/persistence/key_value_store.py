@@ -82,7 +82,7 @@ class KeyValueStore:
             kv.value_type = ValueTypesEnum.INT
             kv.int_value = value
         else:
-            raise TypeError(f"Unknown value type {kv.value_type}")
+            raise ValueError(f"Unknown value type {type(value).__name__}")
         _KeyValueStoreModel.session.add(kv)
         _KeyValueStoreModel.session.commit()
 

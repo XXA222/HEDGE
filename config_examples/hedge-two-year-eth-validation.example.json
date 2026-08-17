@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "dry_run": true,
+  "dry_run_wallet": 1000,
+  "max_open_trades": 1,
+  "stake_currency": "USDT",
+  "stake_amount": "unlimited",
+  "trading_mode": "futures",
+  "margin_mode": "cross",
+  "timeframe": "1m",
+  "exchange": {
+    "name": "binance",
+    "pair_whitelist": ["ETH/USDT:USDT"]
+  },
+  "pairlists": [{"method": "StaticPairList"}],
+  "position_mode": "hedge",
+  "hedge_mode_enabled": true,
+  "managed_pair": "ETH/USDT:USDT",
+  "hedge": {
+    "operation_mode": "paper",
+    "read_only": true,
+    "live_trading_enabled": false,
+    "target_leverage": "3",
+    "paper": {
+      "initial_balance": "1000",
+      "ohlcv_source": "dataprovider",
+      "funding_source": "exchange",
+      "maker_fee_rate": "0.0002",
+      "taker_fee_rate": "0.0004",
+      "market_slippage_bps": "1",
+      "volume_participation": "0.2"
+    },
+    "planner": {
+      "cooldown_seconds": 0,
+      "max_grid_layers": 3
+    }
+  }
+}

@@ -53,7 +53,7 @@ def _commands(root: Path, suite: str) -> list[list[str]]:
         "performance": [
             [
                 python,
-                "tools/benchmark_hedge_audit_h01_1500.py",
+                "tools/benchmark_hedge_performance.py",
                 "--cycles",
                 "1500",
                 "--retention",

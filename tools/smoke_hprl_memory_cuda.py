@@ -106,7 +106,10 @@ def main() -> int:
     nxt = torch.randn((64, resident.observation_dim), dtype=torch.float32)
     done = torch.zeros((64, 1), dtype=torch.float32)
     replay.add(obs, act, rew, nxt, done)
-    batch = replay.sample(32)
+    # ``sample()`` deliberately returns an independently-owned, pageable batch.
+    # Exercise the reusable training hot path here because it is the path that
+    # allocates bounded pinned staging for asynchronous H2D transfer.
+    batch = replay.sample_reusable(32)
     if not batch.obs.is_pinned():
         raise RuntimeError("CPU replay sample staging is not pinned")
     gpu_batch = batch.to(device, non_blocking=False)

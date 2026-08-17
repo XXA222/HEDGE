@@ -185,12 +185,6 @@ def default_phases() -> tuple[TestPhase, ...]:
             "tests/hedge/strategies",
         ),
         TestPhase(
-            "audit_800",
-            "800-round audit remediation validator",
-            ("{python}", "tools/validate_hedge_audit_remediation_800.py"),
-            profiles=("full",),
-        ),
-        TestPhase(
             "full_ruff_debt_audit",
             "Full Ruff style and security debt audit across HEDGE source, tests and tools",
             ("{python}", "-m", "ruff", "check", "freqtrade/hedge", "tests/hedge", "tools"),

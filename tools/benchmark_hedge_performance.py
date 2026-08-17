@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""1500-cycle execution-store regression benchmark for audit H-01/H-02."""
+"""Execution-store throughput and idempotency benchmark."""
 
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def main() -> int:
                 exchange_trade_id=f"trade-{cycle}-{side_index}",
             )
             service.submit(_intent(f"cycle-{cycle}-{side_index}", side))
-        # Match the audit's hot-query pressure without touching terminal history.
+        # Exercise repeated active-order queries without touching terminal history.
         for _ in range(12):
             service.list_orders(
                 account_id="bench",
@@ -96,7 +96,7 @@ def main() -> int:
     # and active-query cardinality.  A generous 2x ratio catches renewed O(N log N).
     stable = ratio < 2.0
     report = {
-        "schema": "freqtrade-hedge-h01-h02-1500-regression-v1",
+        "schema": "freqtrade-hedge-execution-performance-v1",
         "cycles": args.cycles,
         "retention": args.retention,
         "segment_mean_ms": segments,
