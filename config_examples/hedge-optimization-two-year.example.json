@@ -1,0 +1,11 @@
+{
+  "schema_version": "hedge-optimization-config-v1",
+  "method": "grid",
+  "engine": {"initial_balance": "1000", "leverage": "3", "maker_fee_rate": "0.0002", "taker_fee_rate": "0.0004"},
+  "planner": {},
+  "objective": {"reject_liquidation": true},
+  "space": {},
+  "max_candidates": 1,
+  "workers": 1,
+  "walk_forward": {"train_bars": 105120, "test_bars": 17520, "step_bars": 17520, "gap_bars": 288, "anchored": false}
+}

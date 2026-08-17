@@ -1,8 +1,8 @@
 {
   "schema": "freqtrade-hedge-clean-mainline-manifest-v1",
   "version": "freqtrade-hedge-clean-mainline-v1.7-risklevel-rl-dual-runtime-final-closure-risklevel-wf-2y-r4.7-hprl-v2.5.2-local-merge-20260816",
-  "file_count": 1715,
-  "total_bytes": 68196447,
+  "file_count": 1731,
+  "total_bytes": 68257977,
   "files": [
     {
       "path": ".coveragerc",
@@ -226,8 +226,8 @@
     },
     {
       "path": "config_examples/config_hedge_backtest.example.json",
-      "size": 3424,
-      "sha256": "0f3b728db6f0b11ce2461df07d4592b8b820a478d85d992a947ec5bf8b84898b"
+      "size": 3619,
+      "sha256": "f844ab5e2675ca905370fb7738c29bc68989a0783c0c9084ccd7bc233b59c578"
     },
     {
       "path": "config_examples/config_hedge_hyperopt.example.json",
@@ -263,6 +263,11 @@
       "path": "config_examples/config_kraken.example.json",
       "size": 2253,
       "sha256": "fa208978978fc9462f5792b4990e6b5f67b7d0af255492ea292e465c49f3dc0b"
+    },
+    {
+      "path": "config_examples/hedge-optimization-two-year.example.json",
+      "size": 423,
+      "sha256": "3b0f286afd2b7b7bff013caa581efab158de7f0d3de28f2e11de04346418a3dc"
     },
     {
       "path": "config_examples/hedge-research-pipeline.example.json",
@@ -3725,6 +3730,11 @@
       "sha256": "8c1673b1074edb5593ca80d2c2bb5e9a7fd5c62efd7afa9030a429ead6452d3f"
     },
     {
+      "path": "freqtrade/hedge/production/evidence_composition_v2.py",
+      "size": 4083,
+      "sha256": "92030b4e58b4a2d80e00da42db596318bd4ec4e25c9e0fd3428945a5280cff03"
+    },
+    {
       "path": "freqtrade/hedge/production/execution_guard.py",
       "size": 13150,
       "sha256": "3fc3af7a328a176173e7e9d85c9f8c06a32b061a5b112fb8f5885574319c5fa4"
@@ -4130,6 +4140,11 @@
       "sha256": "8a06ef4d6c21ce47b874d3b9888eed612e55b2a6b0c88f6dd1f883325aca5cff"
     },
     {
+      "path": "freqtrade/hedge/research/perpetual_features.py",
+      "size": 7613,
+      "sha256": "1b41351fd966bfad572862137a2aa53b6b1351c52baa6a756d986bca38ecf291"
+    },
+    {
       "path": "freqtrade/hedge/research/pipeline.py",
       "size": 56667,
       "sha256": "e574779396dfbe432dab8f4e8adbd5f9c83e80034788e1421990baebf87cf80b"
@@ -4140,6 +4155,11 @@
       "sha256": "306c1a218a0507e8245dd23c6c78ac49a704e528da8a7b6d66403882ee9856f2"
     },
     {
+      "path": "freqtrade/hedge/research/position_management.py",
+      "size": 9337,
+      "sha256": "ada5bf7e2a6fb6a868b0b07458a9f7f131665dace27b1ed91b328b8883f446a7"
+    },
+    {
       "path": "freqtrade/hedge/research/progress.py",
       "size": 3567,
       "sha256": "71cc3db73f637eac8fde17e3699eafb185d9fccd293de57e3845a420e80d8395"
@@ -4148,6 +4168,16 @@
       "path": "freqtrade/hedge/research/promotion.py",
       "size": 3367,
       "sha256": "f9bdd7074bfc9c4461c2933dc9c0d34dd4fabcd4dccf9df0a0078d60e56a90fe"
+    },
+    {
+      "path": "freqtrade/hedge/research/qualification_funnel.py",
+      "size": 5946,
+      "sha256": "e01c50795bee688285681234b77dc87d3d640bae76338e81ddaaeaf8e2ccde15"
+    },
+    {
+      "path": "freqtrade/hedge/research/regime_ml_v2.py",
+      "size": 6970,
+      "sha256": "be6d9165db71c5253ec75a73dfcb47d0bb057c53484ee92ea8fa89a41573a5af"
     },
     {
       "path": "freqtrade/hedge/research/resources.py",
@@ -4168,6 +4198,11 @@
       "path": "freqtrade/hedge/research/service.py",
       "size": 49352,
       "sha256": "1f49bcecbee4750a6053cf606c4730aa9cf59defbee37e3123914e7b0a6300ab"
+    },
+    {
+      "path": "freqtrade/hedge/research/tail_evaluation.py",
+      "size": 4952,
+      "sha256": "e29e52d86480d6d6d3a3625b36cf37458615f77a0c8f26b580f68760d9d03e81"
     },
     {
       "path": "freqtrade/hedge/research/tensorboard.py",
@@ -7165,6 +7200,11 @@
       "sha256": "2cdc31f099189b335dbbc13fcec9bc4792324b4366833fc2b0e59078ce4e4ef2"
     },
     {
+      "path": "tests/hedge/production/test_evidence_composition_v2.py",
+      "size": 2594,
+      "sha256": "63b46ec45e8ecb7ac253d6847f5577df3796519f4f830a919e314b05d1604791"
+    },
+    {
       "path": "tests/hedge/production/test_fault_campaign_qualification.py",
       "size": 1514,
       "sha256": "d6ad2d303c91f57af06fda461721e5cc8b267971b84064c82c6de22da2d4cc96"
@@ -7485,6 +7525,11 @@
       "sha256": "c823f684933245c262713e96d60cfa8cc210e37613191e0c030f4a8fb8ea34e9"
     },
     {
+      "path": "tests/hedge/test_perpetual_features.py",
+      "size": 2911,
+      "sha256": "192ef1a81fb67a1a2a431b8291d458777350021af009ed9c8b98c3a5e12666ba"
+    },
+    {
       "path": "tests/hedge/test_point_in_time_data_plane.py",
       "size": 1520,
       "sha256": "ca3d00a343525d6d63192d3bf4f4128465bd64ef6fde2e0645675295a901d655"
@@ -7515,6 +7560,16 @@
       "sha256": "d00b18c6c6e32875c39543c34c2bd3e01256df140e279c7216a95de64a609735"
     },
     {
+      "path": "tests/hedge/test_position_management_evidence.py",
+      "size": 2812,
+      "sha256": "451cc4becf5b6e46342146a1e27d644cb6ea36c5e01307d232e06f5ed5870d5b"
+    },
+    {
+      "path": "tests/hedge/test_qualification_funnel.py",
+      "size": 2102,
+      "sha256": "7ed31f58157be3a0946a278b79824fd45509c2b86515adf2c210ecce2dcb62da"
+    },
+    {
       "path": "tests/hedge/test_readonly_preflight_command.py",
       "size": 5710,
       "sha256": "8a51e7c4c89d8a2f40cd06dfe3694a33ec4039db03aec017f2fc8cc364a795f3"
@@ -7525,6 +7580,11 @@
       "sha256": "6220e6d4251612ba50c654e206f3d9bcd21b3caee7de00845aed1b57e95ea738"
     },
     {
+      "path": "tests/hedge/test_regime_ml_v2.py",
+      "size": 2724,
+      "sha256": "44d203af86193bc780fee72db36cdd2fb903853b5446a24dca7989891e3410f6"
+    },
+    {
       "path": "tests/hedge/test_side_query.py",
       "size": 2410,
       "sha256": "bc6b81d0b8a5530004750598f0f2af5d57f2f89f3e9111c99ea43b16538be466"
@@ -7533,6 +7593,11 @@
       "path": "tests/hedge/test_simulation_calibration.py",
       "size": 2849,
       "sha256": "321f34c9dd3ae4aca9dfc7a83150367704502424b19b33e2a433a319e8955e2b"
+    },
+    {
+      "path": "tests/hedge/test_tail_evaluation.py",
+      "size": 1956,
+      "sha256": "3023abda0987d336c222cde5883556cf6ab232dac84966c50a1f101591e2ffb7"
     },
     {
       "path": "tests/hedge/test_validate_cli.py",
@@ -8298,6 +8363,21 @@
       "path": "tools/benchmark_hprl_performance.py",
       "size": 11435,
       "sha256": "b192969840ad5758301fdcd517328ff62152a7b18b76fec24bcbe8908036ffec"
+    },
+    {
+      "path": "tools/build_hedge_backtest_csv.py",
+      "size": 1589,
+      "sha256": "131e0e40254231db8a0e6f37b2e7a1234b0e39d7346ca15742fd860726c37e4c"
+    },
+    {
+      "path": "tools/download_binance_public_funding.py",
+      "size": 2212,
+      "sha256": "7f7eab6cf1159e5bee473d5caabea2448830c06df6a38d19b5b8892ebf932477"
+    },
+    {
+      "path": "tools/download_binance_public_klines.py",
+      "size": 3111,
+      "sha256": "90d6b1c9ad06e667b9e30b3785cca08f320d346836366f07eb166e5571851598"
     },
     {
       "path": "tools/hedge_integrated_smoke.py",
