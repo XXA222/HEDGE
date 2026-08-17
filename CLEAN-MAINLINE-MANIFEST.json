@@ -1,8 +1,8 @@
 {
   "schema": "freqtrade-hedge-clean-mainline-manifest-v1",
   "version": "freqtrade-hedge-clean-mainline-v1.7-risklevel-rl-dual-runtime-final-closure-risklevel-wf-2y-r4.7-hprl-v2.5.2-local-merge-20260816",
-  "file_count": 1697,
-  "total_bytes": 68172099,
+  "file_count": 1699,
+  "total_bytes": 68175188,
   "files": [
     {
       "path": ".coveragerc",
@@ -3710,6 +3710,11 @@
       "sha256": "4bb03ada65d3d41e2cb228f67a283d4374d068aa13c3772ccbd90c02b9d05118"
     },
     {
+      "path": "freqtrade/hedge/production/drift_v2.py",
+      "size": 2445,
+      "sha256": "0f58b047addfcfe4097b02be4ee0167eda7c5c6f5d27986e71aa6795cc1465b0"
+    },
+    {
       "path": "freqtrade/hedge/production/evidence.py",
       "size": 12973,
       "sha256": "8c1673b1074edb5593ca80d2c2bb5e9a7fd5c62efd7afa9030a429ead6452d3f"
@@ -7108,6 +7113,11 @@
       "path": "tests/hedge/production/test_closed_loop_sql.py",
       "size": 3084,
       "sha256": "4e933496105dd2db2815dfcfb5df6cb09f8bc0657b9e610dad8fc18536a489a6"
+    },
+    {
+      "path": "tests/hedge/production/test_drift_v2.py",
+      "size": 644,
+      "sha256": "2cdc31f099189b335dbbc13fcec9bc4792324b4366833fc2b0e59078ce4e4ef2"
     },
     {
       "path": "tests/hedge/production/test_fault_campaign_qualification.py",
