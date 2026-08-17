@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
+from ..telemetry.training_health import CollapseThresholds, RollingCollapseDetector
 from .action_space import canonicalize_offline_action_tensor
 from .config import HPRLActionConfig, HPRLMemoryConfig, HPRLTrainingConfig
 from .device import require_torch, seed_everything, torch_device
@@ -18,6 +20,21 @@ from .replay import CudaReplayPrefetcher, ReplayBatch, TensorReplayBuffer
 
 
 torch = require_torch()
+logger = logging.getLogger(__name__)
+
+
+def _training_health_detector(config: HPRLTrainingConfig) -> RollingCollapseDetector:
+    return RollingCollapseDetector(
+        CollapseThresholds(
+            window=config.health_window,
+            patience=config.health_patience,
+            gradient_norm_min=config.health_gradient_norm_min,
+            update_ratio_min=config.health_update_ratio_min,
+            advantage_std_min=config.health_advantage_std_min,
+            entropy_min=config.health_entropy_min,
+            action_saturation_max=config.health_action_saturation_max,
+        )
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,6 +197,7 @@ class OnlineTrainer:
             if normalization == "return_std"
             else None
         )
+        self.training_health_detector = _training_health_detector(config)
 
     def _warmup_action(self):
         # Environment owns the action contract. Tiered mode samples exact canonical level codes;
@@ -263,6 +281,18 @@ class OnlineTrainer:
                         ) from exc
                     if metrics.values:
                         last_metrics = dict(metrics.values)
+                        health_input = dict(last_metrics)
+                        if health_input.get("stage") == 0.0:
+                            health_input.pop("actor_grad_norm", None)
+                            health_input.pop("actor_update_ratio", None)
+                        last_metrics.update(
+                            self.training_health_detector.update(health_input)
+                        )
+                        if last_metrics["training_health_collapsed"]:
+                            logger.warning(
+                                "HPRL online training health collapse detected: %s",
+                                last_metrics,
+                            )
                     updates += 1
             if group_done:
                 group_resets += 1
@@ -323,6 +353,7 @@ class OfflineTrainer:
             raise ValueError("agent and offline trainer must use the same device")
         if dataset.observation_dim < 1 or dataset.action_dim < 1:
             raise ValueError("offline dataset dimensions must be positive")
+        self.training_health_detector = _training_health_detector(config)
 
     def run(self, updates: int) -> OfflineTrainingSummary:
         if updates < 1:
@@ -409,6 +440,16 @@ class OfflineTrainer:
             metrics = self.agent.update(batch, collect_metrics=collect_metrics)
             if metrics.values:
                 last_metrics = dict(metrics.values)
+                health_input = dict(last_metrics)
+                if health_input.get("stage") == 0.0:
+                    health_input.pop("actor_grad_norm", None)
+                    health_input.pop("actor_update_ratio", None)
+                last_metrics.update(self.training_health_detector.update(health_input))
+                if last_metrics["training_health_collapsed"]:
+                    logger.warning(
+                        "HPRL offline training health collapse detected: %s",
+                        last_metrics,
+                    )
         return OfflineTrainingSummary(
             updates=updates,
             samples_seen=updates * self.config.batch_size,

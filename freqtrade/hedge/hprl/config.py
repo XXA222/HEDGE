@@ -262,6 +262,13 @@ class HPRLTrainingConfig:
     runtime_checks: bool = False
     # Convert training metrics to host scalars only periodically to avoid per-update CUDA sync.
     metrics_interval: int = 100
+    health_window: int = 8
+    health_patience: int = 3
+    health_gradient_norm_min: float = 1e-8
+    health_update_ratio_min: float = 1e-10
+    health_advantage_std_min: float = 1e-7
+    health_entropy_min: float = 1e-3
+    health_action_saturation_max: float = 0.98
     cuda_memory_fraction: float | None = None
     # Fraction of maximum categorical tier entropy targeted by SAC-family policies.
     tier_entropy_target_fraction: float = 0.65
@@ -335,6 +342,8 @@ class HPRLTrainingConfig:
             self.hidden_dim,
             self.hidden_depth,
             self.metrics_interval,
+            self.health_window,
+            self.health_patience,
             self.cpu_threads,
             self.cpu_interop_threads,
             self.expected_updates,
@@ -454,6 +463,11 @@ class HPRLTrainingConfig:
             self.learning_rate,
             self.gradient_clip_norm,
             self.tier_entropy_target_fraction,
+            self.health_gradient_norm_min,
+            self.health_update_ratio_min,
+            self.health_advantage_std_min,
+            self.health_entropy_min,
+            self.health_action_saturation_max,
         )
         if not _finite(*scalars):
             raise HPRLConfigError("training scalar parameters must be finite")
@@ -463,6 +477,19 @@ class HPRLTrainingConfig:
             raise HPRLConfigError("invalid optimizer/network dimensions")
         if self.gradient_clip_norm <= 0:
             raise HPRLConfigError("gradient_clip_norm must be positive")
+        if self.health_window < 2 or self.health_patience < 1:
+            raise HPRLConfigError("health_window must be >= 2 and health_patience positive")
+        health_thresholds = (
+            self.health_gradient_norm_min,
+            self.health_update_ratio_min,
+            self.health_advantage_std_min,
+            self.health_entropy_min,
+            self.health_action_saturation_max,
+        )
+        if any(value < 0.0 for value in health_thresholds):
+            raise HPRLConfigError("training health thresholds must be non-negative")
+        if self.health_action_saturation_max > 1.0:
+            raise HPRLConfigError("health_action_saturation_max cannot exceed 1")
         if not 0 <= self.tier_entropy_target_fraction <= 1:
             raise HPRLConfigError("tier_entropy_target_fraction must be in [0, 1]")
         if self.cuda_memory_fraction is not None:

@@ -187,6 +187,28 @@ HEDGE_RL_RUNTIME_SCHEMA: dict[str, Any] = {
 
 HEDGE_RL_RUNTIME_SCHEMA["properties"]["learning_audit"] = HEDGE_RL_LEARNING_AUDIT_SCHEMA
 
+HEDGE_TRAINING_HEALTH_SCHEMA: dict[str, Any] = {
+    "description": "Gradient, optimizer-update and policy-collapse telemetry thresholds.",
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "interval": {"type": "integer", "minimum": 1, "default": 100},
+        "near_zero_threshold": {"type": "number", "minimum": 0.0, "default": 1e-12},
+        "window": {"type": "integer", "minimum": 2, "default": 8},
+        "patience": {"type": "integer", "minimum": 1, "default": 3},
+        "gradient_norm_min": {"type": "number", "minimum": 0.0, "default": 1e-8},
+        "update_ratio_min": {"type": "number", "minimum": 0.0, "default": 1e-10},
+        "advantage_std_min": {"type": "number", "minimum": 0.0, "default": 1e-7},
+        "entropy_min": {"type": "number", "minimum": 0.0, "default": 1e-3},
+        "action_saturation_max": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "default": 0.98,
+        },
+    },
+}
+
 
 def extend_config_schema(conf_schema: dict[str, Any]) -> None:
     """Idempotently attach Hedge fields to an upstream Freqtrade schema."""
@@ -206,6 +228,7 @@ def extend_config_schema(conf_schema: dict[str, Any]) -> None:
             rl_properties.setdefault("hedge_action_space", HEDGE_RL_ACTION_SPACE_SCHEMA)
             rl_properties.setdefault("hedge_reward", HEDGE_RL_REWARD_SCHEMA)
         freqai_properties.setdefault("hedge_rl_config", HEDGE_RL_RUNTIME_SCHEMA)
+        freqai_properties.setdefault("training_health", HEDGE_TRAINING_HEALTH_SCHEMA)
 
     # Remove an empty sibling accidentally created by an older extension attempt.
     freqai_ref = properties.get("freqai")

@@ -27,6 +27,7 @@ from .base import (
     UpdateMetrics,
     hard_update,
     make_metrics,
+    off_policy_health_metrics,
 )
 
 
@@ -173,13 +174,13 @@ class FastDSACAgent:
             batch.obs, batch.action, batch.reward, batch.next_obs, batch.done,
             alpha_detached, boundaries
         )
-        critic_grad = self._critic_step.step(critic_loss)
+        critic_grad = self._critic_step.step(critic_loss, measure_update=collect_metrics)
 
         with self._critic_freezer.frozen():
             actor_loss, tier_entropy_tensor, log_prob_dim = self._actor_loss_surface(
                 batch.obs, alpha_detached, boundaries
             )
-        actor_grad = self._actor_step.step(actor_loss)
+        actor_grad = self._actor_step.step(actor_loss, measure_update=collect_metrics)
 
         tier_entropy = tier_entropy_tensor if level_count >= 2 else None
         # Keep entropy temperature in FP32 even when the policy/critic use autocast.
@@ -210,4 +211,7 @@ class FastDSACAgent:
             ),
             "critic_grad_norm": critic_grad,
             "actor_grad_norm": actor_grad,
+            "critic_update_ratio": self._critic_step.last_update_ratio,
+            "actor_update_ratio": self._actor_step.last_update_ratio,
+            **off_policy_health_metrics(self, batch),
         })

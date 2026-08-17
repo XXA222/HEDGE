@@ -26,6 +26,7 @@ from freqtrade.freqai.hedge_rl.risk_memory import (
 from freqtrade.freqai.hedge_rl.risk_projection_adapter import HedgeRiskRuntimeContextProvider
 from freqtrade.freqai.hedge_rl.risk_runtime import RiskRLAdaptiveCpuController
 from freqtrade.freqai.prediction_models.ReinforcementLearner import ReinforcementLearner
+from freqtrade.freqai.RL.training_health import SB3TrainingHealthCallback
 
 
 logger = logging.getLogger(__name__)
@@ -276,8 +277,13 @@ class HedgeRiskLevelReinforcementLearner(ReinforcementLearner):
 
         self._ensure_model_cpu(model)
         adaptive_cpu_callback = _AdaptiveRiskCpuCallback(self.hedge_cpu_controller)
+        health_callback = SB3TrainingHealthCallback.from_config(
+            self.freqai_info.get("training_health"),
+            log_prefix="train/risk_level_health",
+        )
         callbacks: list[Any] = [
             adaptive_cpu_callback,
+            health_callback,
             self.eval_callback,
             self.tensorboard_callback,
         ]
@@ -346,6 +352,7 @@ class HedgeRiskLevelReinforcementLearner(ReinforcementLearner):
                         raise
                     logger.exception("Non-blocking Risk-Level post-fit learning audit failed")
         finally:
+            self.training_health_metrics = dict(health_callback.latest_metrics)
             if progressbar_callback:
                 progressbar_callback.on_training_end()
             if self.hedge_memory_config.release_training_envs_after_fit:

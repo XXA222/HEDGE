@@ -1,8 +1,8 @@
 {
   "schema": "freqtrade-hedge-clean-mainline-manifest-v1",
   "version": "freqtrade-hedge-clean-mainline-v1.7-risklevel-rl-dual-runtime-final-closure-risklevel-wf-2y-r4.7-hprl-v2.5.2-local-merge-20260816",
-  "file_count": 1732,
-  "total_bytes": 68237269,
+  "file_count": 1737,
+  "total_bytes": 68283618,
   "files": [
     {
       "path": ".coveragerc",
@@ -281,13 +281,13 @@
     },
     {
       "path": "config_examples/hprl.example.json",
-      "size": 2565,
-      "sha256": "d901e9d9643985f15cc1bba624886c1c45c99670ee0bebb05e3e7c2ad653a006"
+      "size": 2804,
+      "sha256": "8af980dd7298298a61cc60a4449a42226d53068799dcf5181b6ec60c727c72fd"
     },
     {
       "path": "config_examples/hprl.gpu.example.json",
-      "size": 2882,
-      "sha256": "cbb2d8e16fa1878b6bc212dfab9719f997da8b179bb24ab7b212b2f473ec0d76"
+      "size": 3121,
+      "sha256": "4be8db83f41c7415c9d40df5b51a8a10654663ed044537e9400f011076334137"
     },
     {
       "path": "config_examples/strategies/HedgeAdaptiveRegimeStrategy.py",
@@ -1058,6 +1058,11 @@
       "path": "docs/trade-object.md",
       "size": 11232,
       "sha256": "9b5a1aae5ed6bb42c5c813b32b3e733d29e7d276d996b1dee21656d015051593"
+    },
+    {
+      "path": "docs/training-health.md",
+      "size": 1728,
+      "sha256": "b99ab85698079d12a96cef18b61bc27c84f42ebda649673c041bce77360910a6"
     },
     {
       "path": "docs/updating.md",
@@ -1926,8 +1931,8 @@
     },
     {
       "path": "freqtrade/freqai/prediction_models/HedgePyTorchMultiTaskRegressor.py",
-      "size": 3801,
-      "sha256": "55397d7d7f434ab6909fe484960eeeb7377d9e2023e86b4debfb7b9e38b265af"
+      "size": 3932,
+      "sha256": "4c9e10b7eb839c99e7d072c172ab697b46ec3dec60d38ebcbfd917b8a66bce2f"
     },
     {
       "path": "freqtrade/freqai/prediction_models/HedgeReinforcementLearner.py",
@@ -1936,8 +1941,8 @@
     },
     {
       "path": "freqtrade/freqai/prediction_models/HedgeRiskLevelReinforcementLearner.py",
-      "size": 20148,
-      "sha256": "7eb706d84c8c74687d20483427bf3a708f562225c049b1b9396dbfdbef313c95"
+      "size": 20500,
+      "sha256": "bb344622449a9be9f3db592a6dee15220813f2c1c611953533c1362d4bbf8d1a"
     },
     {
       "path": "freqtrade/freqai/prediction_models/LightGBMClassifier.py",
@@ -1961,23 +1966,23 @@
     },
     {
       "path": "freqtrade/freqai/prediction_models/PyTorchMLPClassifier.py",
-      "size": 3531,
-      "sha256": "43ea5b5ebd1c2084803aab5ea39d1b1e412347b9efa720f245dc855be6862cc7"
+      "size": 3662,
+      "sha256": "22006f6c40d4bb6743bdc222de37b70dff7396e56efc38e2955bd8aa626a9641"
     },
     {
       "path": "freqtrade/freqai/prediction_models/PyTorchMLPRegressor.py",
-      "size": 3207,
-      "sha256": "05e5136f002bcc4d7fa2f931b98e7bde32e49a227305163b0d355e4ff35af420"
+      "size": 3338,
+      "sha256": "e0061c2c81dcca5c603b54c811cd7cfee8ca40635d3d1fa3b6c672a3f72e5283"
     },
     {
       "path": "freqtrade/freqai/prediction_models/PyTorchTransformerRegressor.py",
-      "size": 6088,
-      "sha256": "ca8d88500c6bbc7c6b030287c54c3645c863dbe84ea1a5afe60d483e88b3d139"
+      "size": 6219,
+      "sha256": "5c319f83e61382adf169c89998c6302edb308fce0e36b5e060a7068c67ba6132"
     },
     {
       "path": "freqtrade/freqai/prediction_models/ReinforcementLearner.py",
-      "size": 7265,
-      "sha256": "97b40dfbb494fdba87eb6d3b9ec1b2a9fad84a435b01b9946f90e3321d3701ba"
+      "size": 7650,
+      "sha256": "50cef30804d991a3fdccec87cad1be6f093f3b264d2ac8f4c23916e0ccc9b09d"
     },
     {
       "path": "freqtrade/freqai/prediction_models/ReinforcementLearner_multiproc.py",
@@ -2045,6 +2050,11 @@
       "sha256": "8e0f474a19ab5b77e3d3f448746c8a1b854b3244d6698336cf750e9f36c666b8"
     },
     {
+      "path": "freqtrade/freqai/RL/training_health.py",
+      "size": 7032,
+      "sha256": "215fbddb93119fe518e298a2b3b9f7e54ed07708de7d3175ddeb8de22d0f2bd9"
+    },
+    {
       "path": "freqtrade/freqai/tensorboard/__init__.py",
       "size": 745,
       "sha256": "dcc7d7ee7bd82ef4ea5239207e4effd8d734dc2ded848b6bcf54c725f441c5c5"
@@ -2091,8 +2101,8 @@
     },
     {
       "path": "freqtrade/freqai/torch/PyTorchModelTrainer.py",
-      "size": 10497,
-      "sha256": "23680b724ee79446e321cc87c27fc5c0fa7705c2172a35de94d81e4541ae28c7"
+      "size": 14009,
+      "sha256": "1d0c6a0275a3de2b679b649a2d6fd4ffdef3eab899e406a1f5b56c37c61e0da2"
     },
     {
       "path": "freqtrade/freqai/torch/PyTorchTrainerInterface.py",
@@ -2451,8 +2461,8 @@
     },
     {
       "path": "freqtrade/hedge/config_schema_extension.py",
-      "size": 36645,
-      "sha256": "71850fb0c17d4e039b545aa1a72669d70aca4aaf64f9e7f7bead0f7ed4eff790"
+      "size": 37730,
+      "sha256": "0f0f8a2db66949f186daebdc46c558711cca61809877ff0c3d9d3789e44e1ba2"
     },
     {
       "path": "freqtrade/hedge/contracts/__init__.py",
@@ -2856,33 +2866,33 @@
     },
     {
       "path": "freqtrade/hedge/hprl/algorithms/base.py",
-      "size": 10420,
-      "sha256": "f837300305e903522522cc754235677e5da1714ebbb8cc0d23e3c99307a078e1"
+      "size": 14404,
+      "sha256": "fdc953df4000b76ec3fde1708b66ffb161242115514710a689023cedd44c8c36"
     },
     {
       "path": "freqtrade/hedge/hprl/algorithms/fast_dsac.py",
-      "size": 8845,
-      "sha256": "c220b97875bfab7ba023b33e057e318b2365ba390b973d6d9c233f356ee23173"
+      "size": 9136,
+      "sha256": "eab2da658f5e72e19c8a89e02fe28adeddcccc4615820c0b937cf829a84970f0"
     },
     {
       "path": "freqtrade/hedge/hprl/algorithms/fast_td3.py",
-      "size": 5453,
-      "sha256": "3fb0242a4bdd0e78c7e62a40991797efc1305054eefecc6e9174d02a66b00fb6"
+      "size": 6374,
+      "sha256": "5a6fbc061e2da19be477511a8fe8261273f4b8b7ebcfc70b662d2346f95e2e60"
     },
     {
       "path": "freqtrade/hedge/hprl/algorithms/rebrac_v2.py",
-      "size": 18716,
-      "sha256": "a35b39b01b4d106b912b2b90070f35ce1a4b3f9fb3846ee8195be7ae15312af0"
+      "size": 18981,
+      "sha256": "4dbbda9232b560d3051099326c41bf19ab83ec97ccade8f1689084f5e7a8734b"
     },
     {
       "path": "freqtrade/hedge/hprl/algorithms/simba_sac.py",
-      "size": 8733,
-      "sha256": "ee752d0ae54d7d18eea4a898998c13d0eaf279cdd610a0708c96f572420890dc"
+      "size": 9024,
+      "sha256": "b9264d88b593724df2d570afd018eec7928797cec699191f51b2972ff09a5a71"
     },
     {
       "path": "freqtrade/hedge/hprl/algorithms/xqc.py",
-      "size": 12119,
-      "sha256": "a04805238916481b7b78ac17ed970974801b99dc78618a8be89c3e279b4445a2"
+      "size": 13833,
+      "sha256": "d64f7775a3da9a89aca7477a98058b4aa316e4647aacba43a8ac52866ea08605"
     },
     {
       "path": "freqtrade/hedge/hprl/artifact_policy.py",
@@ -2921,8 +2931,8 @@
     },
     {
       "path": "freqtrade/hedge/hprl/config.py",
-      "size": 26705,
-      "sha256": "e845eb3c7c8be3f3e14527634181315cf2c8cfcba90dfeb9bffb16c2a7d3295c"
+      "size": 27939,
+      "sha256": "fa74bf038c1aa1562ab40ce178fa7c2e888c35cc65dcfefa54262fedee6ad5c8"
     },
     {
       "path": "freqtrade/hedge/hprl/contracts.py",
@@ -3026,8 +3036,8 @@
     },
     {
       "path": "freqtrade/hedge/hprl/trainer.py",
-      "size": 17829,
-      "sha256": "24745e087f5d9c714460b76a348cf242a9e82cb049996a31bac8833ad5382f0d"
+      "size": 19917,
+      "sha256": "acbfcd857d9a277ad15194a8495d52b7db0a3e6b42826d8a2c895e0a9e9f78e8"
     },
     {
       "path": "freqtrade/hedge/identity.py",
@@ -4413,6 +4423,11 @@
       "path": "freqtrade/hedge/telemetry/metrics.py",
       "size": 9935,
       "sha256": "499631f6b63cfee8ecc2c41a3d13391b108d631195f36a15164cfac28d0e475c"
+    },
+    {
+      "path": "freqtrade/hedge/telemetry/training_health.py",
+      "size": 10826,
+      "sha256": "8d1d920e4bb806f184f92cc4e1dfbdb5709fef24d96f465f87b7f78142f0a583"
     },
     {
       "path": "freqtrade/hedge/validate.py",
@@ -6565,6 +6580,11 @@
       "sha256": "d3ac07e917fd60f7931f58d8815d098bc62c1d131c181fa4ab54812ed8ace2b0"
     },
     {
+      "path": "tests/hedge/hprl/test_training_health.py",
+      "size": 1599,
+      "sha256": "04cf8a9b73438e1ca6e1f5af3a5e71eac52ba9d6f3905092bd6ae83ce9ac5edf"
+    },
+    {
       "path": "tests/hedge/integration/__init__.py",
       "size": 38,
       "sha256": "91add007f8db1261bc44dc2ba3710c4772bdc8fd48e5086ad44457030bb652c4"
@@ -6816,8 +6836,8 @@
     },
     {
       "path": "tests/hedge/mlrl/test_risk_level_rl_mainline_integration.py",
-      "size": 14222,
-      "sha256": "41737f333be0a4f938f62ba6898b9b5dffdf4056206513273e0761f2683fd261"
+      "size": 14335,
+      "sha256": "9241824fc0fb97625b74f45613595c4352aa9203c218983830bf7a503511351a"
     },
     {
       "path": "tests/hedge/mlrl/test_risk_level_rl_memory.py",
@@ -7453,6 +7473,11 @@
       "path": "tests/hedge/telemetry/test_regressions.py",
       "size": 6321,
       "sha256": "635dd37a8d7a08772efa0bcb00347aa56d8dcf330a99dfcbf676f3226d316e74"
+    },
+    {
+      "path": "tests/hedge/telemetry/test_training_health.py",
+      "size": 7927,
+      "sha256": "9f56ba6033c27fcff9fea3bfd7d7672b6a6db66a9f21b54e790d31447d56745c"
     },
     {
       "path": "tests/hedge/test_architecture.py",

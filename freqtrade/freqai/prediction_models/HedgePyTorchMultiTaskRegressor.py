@@ -30,7 +30,10 @@ class HedgePyTorchMultiTaskRegressor(BasePyTorchRegressor):
         settings = self.freqai_info.get("model_training_parameters", {})
         self.learning_rate = float(settings.get("learning_rate", 3e-4))
         self.model_kwargs: dict[str, Any] = settings.get("model_kwargs", {})
-        self.trainer_kwargs: dict[str, Any] = settings.get("trainer_kwargs", {})
+        self.trainer_kwargs: dict[str, Any] = dict(settings.get("trainer_kwargs", {}))
+        self.trainer_kwargs.setdefault(
+            "training_health", self.freqai_info.get("training_health", {})
+        )
 
     def fit(self, data_dictionary: dict, dk: FreqaiDataKitchen, **kwargs) -> Any:
         n_features = data_dictionary["train_features"].shape[-1]

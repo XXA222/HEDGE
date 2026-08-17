@@ -14,7 +14,16 @@ from ..performance import (
     resolve_grad_clip_foreach,
     resolve_polyak_foreach,
 )
-from .base import FrozenModulePlan, PolyakUpdatePlan, UpdateMetrics, hard_update, make_metrics
+from .base import (
+    FrozenModulePlan,
+    PolyakUpdatePlan,
+    UpdateMetrics,
+    hard_update,
+    make_metrics,
+    off_policy_health_metrics,
+    parameter_update_ratio,
+    snapshot_parameter_values,
+)
 
 
 torch = require_torch()
@@ -83,6 +92,9 @@ class FastTD3Agent:
         maybe_cudagraph_mark_step_begin(self)
         self.update_count += 1
         obs, action = batch.obs, batch.action
+        critic_before = (
+            snapshot_parameter_values(self._critic_params) if collect_metrics else ()
+        )
         with torch.no_grad(), self.precision.autocast():
             noise = torch.randn_like(action) * self.target_noise
             noise = noise.clamp(-self.noise_clip, self.noise_clip)
@@ -101,10 +113,19 @@ class FastTD3Agent:
             self._critic_params,
             cfg.gradient_clip_norm,
         )
+        critic_update_ratio = (
+            parameter_update_ratio(self._critic_params, critic_before)
+            if collect_metrics
+            else torch.zeros((), device=self.device)
+        )
 
         actor_loss_value = torch.zeros((), device=self.device)
         actor_grad = torch.zeros((), device=self.device)
+        actor_update_ratio = torch.zeros((), device=self.device)
         if self.update_count % self.policy_delay == 0:
+            actor_before = (
+                snapshot_parameter_values(self._actor_params) if collect_metrics else ()
+            )
             with self.precision.autocast():
                 actor_action = action_for_critic(self, self.actor(obs), straight_through=True)
                 with self._critic_freezer.frozen():
@@ -117,6 +138,8 @@ class FastTD3Agent:
                 cfg.gradient_clip_norm,
             )
             actor_loss_value = actor_loss.detach()
+            if collect_metrics:
+                actor_update_ratio = parameter_update_ratio(self._actor_params, actor_before)
             self._actor_polyak.step(cfg.tau)
             self._critic_polyak.step(cfg.tau)
 
@@ -127,4 +150,7 @@ class FastTD3Agent:
             "actor_loss": actor_loss_value,
             "critic_grad_norm": critic_grad,
             "actor_grad_norm": actor_grad,
+            "critic_update_ratio": critic_update_ratio,
+            "actor_update_ratio": actor_update_ratio,
+            **off_policy_health_metrics(self, batch),
         })

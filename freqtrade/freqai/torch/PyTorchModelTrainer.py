@@ -10,6 +10,13 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from freqtrade.freqai.torch.PyTorchDataConvertor import PyTorchDataConvertor
 from freqtrade.freqai.torch.PyTorchTrainerInterface import PyTorchTrainerInterface
+from freqtrade.hedge.telemetry.training_health import (
+    CollapseThresholds,
+    RollingCollapseDetector,
+    measure_gradients,
+    measure_parameter_update,
+    snapshot_parameters,
+)
 
 from .datasets import WindowDataset
 
@@ -63,6 +70,33 @@ class PyTorchModelTrainer(PyTorchTrainerInterface):
         self.tb_logger = tb_logger
         self.test_batch_counter = 0
 
+        health_config = dict(kwargs.get("training_health", {}))
+        self.training_health_interval = int(health_config.get("interval", 100))
+        if self.training_health_interval < 1:
+            raise ValueError("training health interval must be positive")
+        self.training_health_near_zero_threshold = float(
+            health_config.get("near_zero_threshold", 1e-12)
+        )
+        threshold_names = {
+            "window",
+            "patience",
+            "gradient_norm_min",
+            "update_ratio_min",
+            "advantage_std_min",
+            "entropy_min",
+            "action_saturation_max",
+        }
+        self.training_health_detector = RollingCollapseDetector(
+            CollapseThresholds(
+                **{
+                    name: health_config[name]
+                    for name in threshold_names
+                    if name in health_config
+                }
+            )
+        )
+        self.training_health_metrics: dict[str, float] = {}
+
         # Early stopping parameters
         self.early_stopping_patience: int = kwargs.get("early_stopping_patience", 0)
         self.best_val_loss: float = float("inf")
@@ -105,9 +139,52 @@ class PyTorchModelTrainer(PyTorchTrainerInterface):
                 yb_pred = self.model(xb)
                 loss = self.criterion(yb_pred, yb)
 
+                collect_health = (
+                    batch_counter == 0
+                    or (batch_counter + 1) % self.training_health_interval == 0
+                )
+                named_parameters = tuple(self.model.named_parameters()) if collect_health else ()
+                before = snapshot_parameters(named_parameters) if collect_health else {}
                 self.optimizer.zero_grad(set_to_none=True)
                 loss.backward()
+                gradient_health = (
+                    measure_gradients(
+                        named_parameters,
+                        near_zero_threshold=self.training_health_near_zero_threshold,
+                    )
+                    if collect_health
+                    else None
+                )
                 self.optimizer.step()
+                if gradient_health is not None:
+                    update_ratio, per_layer_updates = measure_parameter_update(
+                        named_parameters, before
+                    )
+                    health_metrics = {
+                        "global_grad_norm": gradient_health.global_norm,
+                        "near_zero_ratio": gradient_health.near_zero_ratio,
+                        "parameter_update_ratio": update_ratio,
+                    }
+                    health_metrics.update(self.training_health_detector.update(health_metrics))
+                    self.training_health_metrics = health_metrics
+                    if health_metrics["training_health_collapsed"]:
+                        logger.warning(
+                            "PyTorch training health collapse detected at batch=%s metrics=%s",
+                            batch_counter,
+                            health_metrics,
+                        )
+                    for name, value in health_metrics.items():
+                        self.tb_logger.log_scalar(
+                            f"training_health/{name}", value, batch_counter
+                        )
+                    for name, value in gradient_health.per_layer_norm.items():
+                        self.tb_logger.log_scalar(
+                            f"training_health/layers/{name}/grad_norm", value, batch_counter
+                        )
+                    for name, value in per_layer_updates.items():
+                        self.tb_logger.log_scalar(
+                            f"training_health/layers/{name}/update_ratio", value, batch_counter
+                        )
                 self.tb_logger.log_scalar("train_loss", loss.item(), batch_counter)
                 batch_counter += 1
 

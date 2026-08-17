@@ -9,6 +9,7 @@ from freqtrade.freqai.data_kitchen import FreqaiDataKitchen
 from freqtrade.freqai.RL.Base5ActionRLEnv import Actions, Base5ActionRLEnv, Positions
 from freqtrade.freqai.RL.BaseEnvironment import BaseEnvironment
 from freqtrade.freqai.RL.BaseReinforcementLearningModel import BaseReinforcementLearningModel
+from freqtrade.freqai.RL.training_health import SB3TrainingHealthCallback
 
 
 logger = logging.getLogger(__name__)
@@ -77,7 +78,15 @@ class ReinforcementLearner(BaseReinforcementLearningModel):
             )
             model = self.dd.model_dictionary[dk.pair]
             model.set_env(self.train_env)
-        callbacks: list[Any] = [self.eval_callback, self.tensorboard_callback]
+        health_callback = SB3TrainingHealthCallback.from_config(
+            self.freqai_info.get("training_health"),
+            log_prefix="train/health",
+        )
+        callbacks: list[Any] = [
+            health_callback,
+            self.eval_callback,
+            self.tensorboard_callback,
+        ]
         progressbar_callback: ProgressBarCallback | None = None
         if self.rl_config.get("progress_bar", False):
             progressbar_callback = ProgressBarCallback()
@@ -89,6 +98,7 @@ class ReinforcementLearner(BaseReinforcementLearningModel):
                 callback=callbacks,
             )
         finally:
+            self.training_health_metrics = dict(health_callback.latest_metrics)
             if progressbar_callback:
                 progressbar_callback.on_training_end()
 

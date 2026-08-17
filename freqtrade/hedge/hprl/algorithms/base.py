@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Mapping
@@ -136,7 +137,13 @@ class PolyakUpdatePlan:
 class OptimizerStepPlan:
     """Pre-bound backward/clip/optimizer execution plan for one parameter group."""
 
-    __slots__ = ("precision", "optimizer", "parameters", "max_norm")
+    __slots__ = (
+        "precision",
+        "optimizer",
+        "parameters",
+        "max_norm",
+        "last_update_ratio",
+    )
 
     def __init__(self, precision, optimizer, parameters, max_norm: float) -> None:
         self.precision = precision
@@ -145,6 +152,8 @@ class OptimizerStepPlan:
         self.max_norm = float(max_norm)
         if self.max_norm <= 0.0:
             raise ValueError("optimizer step max_norm must be positive")
+        device = self.parameters[0].device if self.parameters else torch.device("cpu")
+        self.last_update_ratio = torch.zeros((), device=device)
 
     def backward_and_clip(self, loss):
         return self.precision.backward_and_clip(
@@ -154,10 +163,94 @@ class OptimizerStepPlan:
     def optimizer_step(self) -> None:
         self.precision.optimizer_step(self.optimizer)
 
-    def step(self, loss):
+    def step(self, loss, *, measure_update: bool = False):
+        before = snapshot_parameter_values(self.parameters) if measure_update else ()
         norm = self.backward_and_clip(loss)
         self.optimizer_step()
+        if measure_update:
+            self.last_update_ratio = parameter_update_ratio(self.parameters, before)
         return norm
+
+
+@torch.no_grad()
+def snapshot_parameter_values(parameters):
+    """Device-resident snapshots used only on sampled telemetry updates."""
+
+    return tuple(parameter.detach().clone() for parameter in parameters)
+
+
+@torch.no_grad()
+def parameter_update_ratio(parameters, before):
+    """Actual global parameter delta divided by the pre-update weight norm."""
+
+    if len(parameters) != len(before):
+        raise ValueError("parameter update snapshot does not match parameter group")
+    if not parameters:
+        return torch.zeros(())
+    delta_squared = torch.zeros((), device=parameters[0].device, dtype=torch.float32)
+    weight_squared = torch.zeros_like(delta_squared)
+    for parameter, old in zip(parameters, before, strict=True):
+        delta_squared.add_((parameter.detach().float() - old.float()).square().sum())
+        weight_squared.add_(old.float().square().sum())
+    return delta_squared.sqrt() / weight_squared.sqrt().clamp_min(1e-12)
+
+
+def _critic_minimum(critic, obs, action):
+    first, second = critic(obs, action)
+    if isinstance(first, tuple):
+        first = first[0]
+    if isinstance(second, tuple):
+        second = second[0]
+    return torch.minimum(first, second)
+
+
+@torch.no_grad()
+def off_policy_health_metrics(agent, batch) -> dict[str, object]:
+    """Current-policy collapse signals and one-step TD-advantage dispersion.
+
+    Off-policy agents do not retain PPO-style advantages.  Their corresponding learning signal is
+    the one-step TD advantage ``target - Q(s, a)``.  Entropy is measured empirically from current
+    policy actions and normalized to [0, 1] per action dimension.
+    """
+
+    critic_training = agent.critic.training
+    target_training = agent.critic_target.training
+    agent.critic.eval()
+    agent.critic_target.eval()
+    try:
+        # Deterministic actions make telemetry observational: sampling here must not advance the
+        # RNG or alter the subsequent training trajectory merely because metrics are enabled.
+        policy_action = agent.act(batch.obs, deterministic=True).float()
+        action_2d = policy_action.reshape(policy_action.shape[0], -1).clamp(0.0, 1.0)
+        saturation = ((action_2d <= 0.02) | (action_2d >= 0.98)).float().mean()
+        bins = 16
+        encoded = torch.clamp((action_2d * bins).long(), 0, bins - 1)
+        entropies = []
+        for dimension in range(encoded.shape[1]):
+            counts = torch.bincount(encoded[:, dimension], minlength=bins).float()
+            probabilities = counts / counts.sum().clamp_min(1.0)
+            nonzero = probabilities > 0
+            entropy = -(probabilities[nonzero] * probabilities[nonzero].log()).sum()
+            entropies.append(entropy / math.log(float(bins)))
+        policy_entropy = (
+            torch.stack(entropies).mean()
+            if entropies
+            else torch.zeros((), device=policy_action.device)
+        )
+
+        current_q = _critic_minimum(agent.critic, batch.obs, batch.action)
+        next_action = agent.act(batch.next_obs, deterministic=True).float()
+        next_q = _critic_minimum(agent.critic_target, batch.next_obs, next_action)
+        target = batch.reward + agent.config.gamma * (1.0 - batch.done) * next_q
+        advantage_std = (target - current_q).float().std(unbiased=False)
+    finally:
+        agent.critic.train(critic_training)
+        agent.critic_target.train(target_training)
+    return {
+        "policy_entropy": policy_entropy,
+        "action_saturation": saturation,
+        "advantage_std": advantage_std,
+    }
 
 
 class FrozenModulePlan:

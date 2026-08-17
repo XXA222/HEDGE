@@ -26,6 +26,9 @@ from .base import (
     UpdateMetrics,
     hard_update,
     make_metrics,
+    off_policy_health_metrics,
+    parameter_update_ratio,
+    snapshot_parameter_values,
 )
 
 
@@ -147,6 +150,9 @@ class XQCAgent:
         alpha_detached = self.log_alpha.detach().exp()
         with torch.no_grad():
             self.log_alpha.clamp_(-20.0, 5.0)
+        critic_before = (
+            snapshot_parameter_values(self._critic_params) if collect_metrics else ()
+        )
 
         with recorder.record("forward_backward.critic_forward"):
             self.critic.train()
@@ -168,11 +174,20 @@ class XQCAgent:
         with recorder.record("optimizer.critic"):
             self._critic_step.optimizer_step()
             self.critic.project_weight_norm_to_unit_sphere()
+        critic_update_ratio = (
+            parameter_update_ratio(self._critic_params, critic_before)
+            if collect_metrics
+            else torch.zeros((), device=self.device)
+        )
 
         actor_loss_value = torch.zeros((), device=self.device)
         alpha_loss_value = torch.zeros((), device=self.device)
         actor_grad = torch.zeros((), device=self.device)
+        actor_update_ratio = torch.zeros((), device=self.device)
         if self.update_count % self.policy_delay == 0:
+            actor_before = (
+                snapshot_parameter_values(self._actor_params) if collect_metrics else ()
+            )
             with recorder.record("forward_backward.actor_forward"):
                 with self.precision.autocast():
                     action, log_prob, _ = self.actor.sample(batch.obs)
@@ -184,6 +199,8 @@ class XQCAgent:
                 actor_grad = self._actor_step.backward_and_clip(actor_loss)
             with recorder.record("optimizer.actor"):
                 self._actor_step.optimizer_step()
+            if collect_metrics:
+                actor_update_ratio = parameter_update_ratio(self._actor_params, actor_before)
             with recorder.record("optimizer.alpha"):
                 alpha_loss = -(
                     self.log_alpha * (log_prob.detach().float() + self.target_entropy)
@@ -208,6 +225,9 @@ class XQCAgent:
                 "alpha": self.alpha.detach(),
                 "critic_grad_norm": critic_grad,
                 "actor_grad_norm": actor_grad,
+                "critic_update_ratio": critic_update_ratio,
+                "actor_update_ratio": actor_update_ratio,
+                **off_policy_health_metrics(self, batch),
             })
 
     def update(self, batch, *, collect_metrics: bool = True) -> UpdateMetrics:
@@ -217,6 +237,9 @@ class XQCAgent:
         alpha_detached = self.log_alpha.detach().exp()
         with torch.no_grad():
             self.log_alpha.clamp_(-20.0, 5.0)
+        critic_before = (
+            snapshot_parameter_values(self._critic_params) if collect_metrics else ()
+        )
         self.critic.train()
         with torch.no_grad(), self.precision.autocast():
             next_action, next_log_prob, _ = self.actor.sample(batch.next_obs)
@@ -235,11 +258,20 @@ class XQCAgent:
             critic_loss = self._xqc_critic_loss_surface(joined_obs, joined_action, target, rows)
         critic_grad = self._critic_step.step(critic_loss)
         self.critic.project_weight_norm_to_unit_sphere()
+        critic_update_ratio = (
+            parameter_update_ratio(self._critic_params, critic_before)
+            if collect_metrics
+            else torch.zeros((), device=self.device)
+        )
 
         actor_loss_value = torch.zeros((), device=self.device)
         alpha_loss_value = torch.zeros((), device=self.device)
         actor_grad = torch.zeros((), device=self.device)
+        actor_update_ratio = torch.zeros((), device=self.device)
         if self.update_count % self.policy_delay == 0:
+            actor_before = (
+                snapshot_parameter_values(self._actor_params) if collect_metrics else ()
+            )
             with self.precision.autocast():
                 action, log_prob, _ = self.actor.sample(batch.obs)
                 critic_action = action_for_critic(self, action, straight_through=True)
@@ -247,6 +279,8 @@ class XQCAgent:
                     q = self._xqc_actor_q_surface(batch.obs, critic_action)
                     actor_loss = (alpha_detached * log_prob - q).mean()
             actor_grad = self._actor_step.step(actor_loss)
+            if collect_metrics:
+                actor_update_ratio = parameter_update_ratio(self._actor_params, actor_before)
 
             alpha_loss = -(
                 self.log_alpha * (log_prob.detach().float() + self.target_entropy)
@@ -268,4 +302,7 @@ class XQCAgent:
             "alpha": self.alpha.detach(),
             "critic_grad_norm": critic_grad,
             "actor_grad_norm": actor_grad,
+            "critic_update_ratio": critic_update_ratio,
+            "actor_update_ratio": actor_update_ratio,
+            **off_policy_health_metrics(self, batch),
         })

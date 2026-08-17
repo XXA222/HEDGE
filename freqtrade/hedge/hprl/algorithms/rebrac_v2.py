@@ -30,6 +30,7 @@ from .base import (
     UpdateMetrics,
     hard_update,
     make_metrics,
+    off_policy_health_metrics,
 )
 
 
@@ -403,21 +404,20 @@ class ReBRACv2Agent:
         self._critic_polyak.step(self.config.tau)
 
     def update(self, batch, *, collect_metrics: bool = True) -> UpdateMetrics:
-        cfg = self.config
         maybe_cudagraph_mark_step_begin(self)
         self.update_count += 1
 
         critic_loss = self._critic_loss_surface(
             batch.obs, batch.action, batch.reward, batch.next_obs, batch.done
         )
-        critic_grad = self._critic_step.step(critic_loss)
+        critic_grad = self._critic_step.step(critic_loss, measure_update=collect_metrics)
 
         actor_loss_value = torch.zeros((), device=self.device)
         actor_grad = torch.zeros((), device=self.device)
         if self.update_count > self.warmup_updates:
             with self._critic_freezer.frozen():
                 actor_loss = self._actor_loss_surface(batch.obs, batch.action)
-            actor_grad = self._actor_step.step(actor_loss)
+            actor_grad = self._actor_step.step(actor_loss, measure_update=collect_metrics)
             actor_loss_value = actor_loss.detach()
         self._post_update_surface()
         if not collect_metrics:
@@ -427,5 +427,8 @@ class ReBRACv2Agent:
             "actor_loss": actor_loss_value,
             "critic_grad_norm": critic_grad,
             "actor_grad_norm": actor_grad,
+            "critic_update_ratio": self._critic_step.last_update_ratio,
+            "actor_update_ratio": self._actor_step.last_update_ratio,
+            **off_policy_health_metrics(self, batch),
             "stage": 0.0 if self.update_count <= self.warmup_updates else 1.0,
         })

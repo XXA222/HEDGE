@@ -111,6 +111,8 @@ def test_schema_exposes_action_reward_and_runtime_without_replacing_freqai_ref()
     assert "hedge_reward" in freqai["rl_config"]["properties"]
     assert "hedge_rl_config" in freqai
     assert "adaptive_cpu" in freqai["hedge_rl_config"]["properties"]
+    assert "training_health" in freqai
+    assert "gradient_norm_min" in freqai["training_health"]["properties"]
     assert schema["properties"]["freqai"] == {"$ref": "#/definitions/freqai"}
 
 
