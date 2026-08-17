@@ -40,6 +40,7 @@ from .state_machine import (
     OrderLifecycle,
     OrderState,
 )
+from .runtime_lifecycle import ExecutionRuntimeLifecycle
 
 
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
@@ -753,6 +754,7 @@ class ExecutionService:
         kill_switch: KillSwitch,
         audit: AuditPort | None = None,
         metrics: ExecutionMetricsPort | None = None,
+        runtime_lifecycle: ExecutionRuntimeLifecycle | None = None,
     ) -> None:
         self._risk = risk
         self._exchange = exchange
@@ -762,6 +764,7 @@ class ExecutionService:
         self._kill_switch = kill_switch
         self._audit = audit or NullAudit()
         self._metrics = metrics or NullMetrics()
+        self._runtime_lifecycle = runtime_lifecycle or ExecutionRuntimeLifecycle()
         self._leg_locks = tuple(RLock() for _ in range(self._LOCK_STRIPES))
 
     def submit(self, intent: OrderIntent) -> ExecutionResult:
@@ -824,6 +827,8 @@ class ExecutionService:
                 result = self._recover_existing_execution(existing, intent)
                 self._idempotency.complete(intent.idempotency_key, result)
                 return result
+
+            self._runtime_lifecycle.assert_intent_allowed(reduces_risk=intent.reduces_risk)
 
             self._kill_switch.assert_allowed(reduces_risk=intent.reduces_risk)
             if not intent.reduces_risk and self._store.has_unresolved_unknown(leg_key):
