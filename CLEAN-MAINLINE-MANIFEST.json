@@ -1,8 +1,8 @@
 {
   "schema": "freqtrade-hedge-clean-mainline-manifest-v1",
   "version": "freqtrade-hedge-clean-mainline-v1.7-risklevel-rl-dual-runtime-final-closure-risklevel-wf-2y-r4.7-hprl-v2.5.2-local-merge-20260816",
-  "file_count": 1733,
-  "total_bytes": 68279189,
+  "file_count": 1735,
+  "total_bytes": 68289001,
   "files": [
     {
       "path": ".coveragerc",
@@ -3640,6 +3640,11 @@
       "sha256": "94901fc806f8835fc7f203f2ea51624bbf1bdf2edd5a38754df3610f7697b188"
     },
     {
+      "path": "freqtrade/hedge/production/binance_credentials.py",
+      "size": 3907,
+      "sha256": "fd33710616b685b080f69b9d0668c3a4b12bf7058f7e8648411d126a0bf67bd7"
+    },
+    {
       "path": "freqtrade/hedge/production/binance_dryrun.py",
       "size": 7767,
       "sha256": "5757e32faa04b549187e8c2960554ee7710ec8782fb0b66e56ce05cd7673fe9e"
@@ -7170,6 +7175,11 @@
       "sha256": "466a679d2491496209a3d1ca5b2bdabb6a99001ece08ee9758bd6fdef08cd889"
     },
     {
+      "path": "tests/hedge/production/test_binance_credentials.py",
+      "size": 2351,
+      "sha256": "f9e8307a0f7e07387734eb7820b461baf567323f6a6489be157d7d0b8c661931"
+    },
+    {
       "path": "tests/hedge/production/test_chaos_proof.py",
       "size": 465,
       "sha256": "95afd88dc0aac57990b0bdd1d58cc209e322c4fdd4151354356810bda9568f7e"
@@ -8431,8 +8441,8 @@
     },
     {
       "path": "tools/run_hedge_comprehensive_tests.py",
-      "size": 17542,
-      "sha256": "609a005ebc3a447ccdc7b1b788b6ad135d97fb9ea8340fd1807e0a5b27d531f8"
+      "size": 21096,
+      "sha256": "569430f566dde5d858b22d7416383114bb634218d371b51b6c28461c91a599cf"
     },
     {
       "path": "tools/run_hedge_cpu_adaptive_focused.py",

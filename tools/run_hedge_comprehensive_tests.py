@@ -20,6 +20,12 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
+from freqtrade.hedge.production.binance_credentials import (
+    BinanceCredentials,
+    CredentialFileError,
+    load_binance_credentials,
+)
+
 
 class PhaseStatus(StrEnum):
     PASS = "PASS"  # noqa: S105 - status label, never a credential
@@ -39,6 +45,8 @@ class TestPhase:
     requires_external: bool = False
     requires_long_run: bool = False
     requires_cuda: bool = False
+    requires_binance_credentials: bool = False
+    requires_binance_readonly_config: bool = False
 
     def __post_init__(self) -> None:
         if not self.identifier.replace("_", "").isalnum():
@@ -206,6 +214,24 @@ def default_phases() -> tuple[TestPhase, ...]:
             profiles=("full",),
         ),
         TestPhase(
+            "binance_readonly_preflight",
+            "Binance Hedge REST-only account preflight with external local credentials",
+            (
+                "{python}",
+                "-m",
+                "freqtrade",
+                "hedge-readonly-check",
+                "--config",
+                "{binance_readonly_config}",
+                "--output",
+                "{output_dir}/binance-readonly-preflight.json",
+            ),
+            profiles=("full",),
+            requires_external=True,
+            requires_binance_credentials=True,
+            requires_binance_readonly_config=True,
+        ),
+        TestPhase(
             "exchange_online",
             "Exchange online compatibility tests; requires network access",
             ("{python}", "-m", "pytest", "-q", "tests/exchange_online"),
@@ -238,6 +264,8 @@ def select_phases(
     include_external: bool,
     include_long: bool,
     cuda_available: bool,
+    binance_credentials_available: bool = False,
+    binance_readonly_config_available: bool = False,
 ) -> tuple[tuple[TestPhase, ...], tuple[PhaseResult, ...]]:
     selected: list[TestPhase] = []
     skipped: list[PhaseResult] = []
@@ -251,6 +279,10 @@ def select_phases(
             reason = "requires --include-long"
         elif phase.requires_cuda and not cuda_available:
             reason = "CUDA unavailable"
+        elif phase.requires_binance_credentials and not binance_credentials_available:
+            reason = "requires a valid --binance-credentials-file"
+        elif phase.requires_binance_readonly_config and not binance_readonly_config_available:
+            reason = "requires a valid --binance-readonly-config"
         if reason:
             skipped.append(
                 PhaseResult(
@@ -289,8 +321,15 @@ def _phase_command(
     python: str,
     base_temp: Path,
     junit_path: Path,
+    binance_readonly_config: Path,
+    output_dir: Path,
 ) -> tuple[str, ...]:
-    command = tuple(item.replace("{python}", python) for item in phase.command)
+    command = tuple(
+        item.replace("{python}", python)
+        .replace("{binance_readonly_config}", str(binance_readonly_config))
+        .replace("{output_dir}", str(output_dir))
+        for item in phase.command
+    )
     if phase.pytest_phase:
         return (
             *command,
@@ -310,6 +349,8 @@ def execute_phase(
     output_dir: Path,
     python: str,
     timeout_seconds: int,
+    binance_readonly_config: Path = Path("config.json"),
+    extra_environment: dict[str, str] | None = None,
 ) -> PhaseResult:
     log_path = output_dir / "logs" / f"{phase.identifier}.log"
     junit_path = output_dir / "junit" / f"{phase.identifier}.xml" if phase.pytest_phase else None
@@ -323,6 +364,8 @@ def execute_phase(
         python=python,
         base_temp=base_temp,
         junit_path=junit_path or output_dir / "unused.xml",
+        binance_readonly_config=binance_readonly_config,
+        output_dir=output_dir,
     )
     started = time.monotonic()
     try:
@@ -335,7 +378,7 @@ def execute_phase(
                 stderr=subprocess.STDOUT,
                 timeout=timeout_seconds,
                 check=False,
-                env={**os.environ, "PYTHONUTF8": "1"},
+                env={**os.environ, "PYTHONUTF8": "1", **(extra_environment or {})},
             )
         status = PhaseStatus.PASS if completed.returncode == 0 else PhaseStatus.FAIL
         detail = "" if status is PhaseStatus.PASS else f"exit code {completed.returncode}"
@@ -453,6 +496,17 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--profile", choices=("smoke", "standard", "full"), default="standard")
     parser.add_argument("--include-external", action="store_true")
     parser.add_argument("--include-long", action="store_true")
+    parser.add_argument(
+        "--binance-credentials-file",
+        type=Path,
+        help="Local key/secret file; values are injected only into external child processes.",
+    )
+    parser.add_argument(
+        "--binance-readonly-config",
+        type=Path,
+        default=Path("user_data/config_r58_live_readonly.json"),
+        help="Read-only Binance Hedge config used by the opt-in external preflight.",
+    )
     parser.add_argument("--timeout-seconds", type=int, default=900)
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--list-phases", action="store_true")
@@ -473,12 +527,42 @@ def main() -> int:
     output_dir = (args.output_dir or root / "artifacts" / "comprehensive-tests" / stamp).resolve()
     output_dir.mkdir(parents=True, exist_ok=False)
     cuda_available = _cuda_available(args.python, root)
+    credential_result: PhaseResult | None = None
+    credentials: BinanceCredentials | None = None
+    if args.binance_credentials_file is not None:
+        try:
+            credentials = load_binance_credentials(args.binance_credentials_file)
+        except CredentialFileError as exc:
+            credential_result = PhaseResult(
+                "binance_credentials",
+                PhaseStatus.ERROR,
+                0.0,
+                None,
+                (),
+                "",
+                None,
+                str(exc),
+            )
+        else:
+            credential_result = PhaseResult(
+                "binance_credentials",
+                PhaseStatus.PASS,
+                0.0,
+                0,
+                (),
+                "",
+                None,
+                "loaded locally; values redacted",
+            )
+    readonly_config = args.binance_readonly_config.expanduser().resolve()
     selected, skipped = select_phases(
         phases,
         profile=args.profile,
         include_external=args.include_external,
         include_long=args.include_long,
         cuda_available=cuda_available,
+        binance_credentials_available=credentials is not None,
+        binance_readonly_config_available=readonly_config.is_file(),
     )
     started_at = datetime.now(UTC)
     print(f"HEDGE comprehensive test run: {len(selected)} selected, {len(skipped)} skipped")
@@ -491,6 +575,12 @@ def main() -> int:
             output_dir=output_dir,
             python=args.python,
             timeout_seconds=args.timeout_seconds,
+            binance_readonly_config=readonly_config,
+            extra_environment=(
+                credentials.environment()
+                if phase.requires_binance_credentials and credentials is not None
+                else None
+            ),
         )
         print(
             (
@@ -501,7 +591,11 @@ def main() -> int:
         )
         return result
 
-    results = (*skipped, *run_phases(selected, executor))
+    results = (
+        *((credential_result,) if credential_result is not None else ()),
+        *skipped,
+        *run_phases(selected, executor),
+    )
     finished_at = datetime.now(UTC)
     payload = _json_payload(
         root=root,
