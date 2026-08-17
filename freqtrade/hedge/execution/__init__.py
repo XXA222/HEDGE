@@ -14,6 +14,11 @@ from typing import Any
 
 _EXPORTS: dict[str, tuple[str, str]] = {
     "ActionGroupExecutor": (".action_group", "ActionGroupExecutor"),
+    "ExecutionAlgorithm": (".algorithms", "ExecutionAlgorithm"),
+    "ExecutionAlgorithmContext": (".algorithms", "ExecutionAlgorithmContext"),
+    "ExecutionAlgorithmPlan": (".algorithms", "ExecutionAlgorithmPlan"),
+    "plan_execution": (".algorithms", "plan_execution"),
+    "select_execution_algorithm": (".algorithms", "select_execution_algorithm"),
     "ActionGroupReport": (".action_group", "ActionGroupReport"),
     "build_close_both_intents": (".action_group", "build_close_both_intents"),
     "build_close_both_plan": (".action_group", "build_close_both_plan"),

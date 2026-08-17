@@ -1,8 +1,8 @@
 {
   "schema": "freqtrade-hedge-clean-mainline-manifest-v1",
   "version": "freqtrade-hedge-clean-mainline-v1.7-risklevel-rl-dual-runtime-final-closure-risklevel-wf-2y-r4.7-hprl-v2.5.2-local-merge-20260816",
-  "file_count": 1691,
-  "total_bytes": 68155534,
+  "file_count": 1693,
+  "total_bytes": 68161684,
   "files": [
     {
       "path": ".coveragerc",
@@ -2656,8 +2656,8 @@
     },
     {
       "path": "freqtrade/hedge/execution/__init__.py",
-      "size": 8666,
-      "sha256": "0c6938974295ac895ae7b1a5baf13db2a0c0444381b2b3c64837128c1e62acf1"
+      "size": 9021,
+      "sha256": "56c12a7eda9e2ec52eaf4454fc52708dd88434ba6edab93ddc7b707bb0f59c4d"
     },
     {
       "path": "freqtrade/hedge/execution/action_group.py",
@@ -2668,6 +2668,11 @@
       "path": "freqtrade/hedge/execution/action_group_store.py",
       "size": 3088,
       "sha256": "4da8d4335987fab1493b0577f6a6bfa04d16efbb510a0128c7f39125daf2d0f4"
+    },
+    {
+      "path": "freqtrade/hedge/execution/algorithms.py",
+      "size": 4544,
+      "sha256": "ace067d08b36f6756080c085348b74ce958a0017888ef3c3af089cf7f64d7f14"
     },
     {
       "path": "freqtrade/hedge/execution/binance_environment.py",
@@ -6288,6 +6293,11 @@
       "path": "tests/hedge/execution/test_contract_versions.py",
       "size": 468,
       "sha256": "00c1262b211d81ab33bd51764c3e2b46348ce29d2875d789adf97e8cd06e882f"
+    },
+    {
+      "path": "tests/hedge/execution/test_execution_algorithms.py",
+      "size": 1251,
+      "sha256": "d26b826e38f952e342d592bfb4bbb10099b5656c26536a0bd684796e44ae8494"
     },
     {
       "path": "tests/hedge/execution/test_execution_costs.py",
