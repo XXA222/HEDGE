@@ -49,6 +49,14 @@ _EXPORTS: dict[str, tuple[str, str]] = {
         "freqtrade.hedge.strategies.simple_ma_hedge",
         "SimpleDualLegMaHedgeStrategy",
     ),
+    "HprlEthDualLegConfig": (
+        "freqtrade.hedge.strategies.hprl_eth_dual_leg",
+        "HprlEthDualLegConfig",
+    ),
+    "HprlEthDualLegStrategy": (
+        "freqtrade.hedge.strategies.hprl_eth_dual_leg",
+        "HprlEthDualLegStrategy",
+    ),
 }
 
 __all__ = sorted(_EXPORTS)
