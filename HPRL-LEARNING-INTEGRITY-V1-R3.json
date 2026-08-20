@@ -1,0 +1,10 @@
+{
+  "release": "hprl-learning-integrity-v1-r3-zero-volume-hotfix-20260819",
+  "installed_at": "2026-08-19T21:54:26.6639235+08:00",
+  "project_root": "D:\\Program Files\\HEDGE",
+  "required_r2_marker": "HPRL-LEARNING-INTEGRITY-V1-R2.json",
+  "previous_sha256": "b7c1e333ebf64b69f86af84148c803855b2d4e6d98aa7586ae4f89561bc8a4fc",
+  "installed_sha256": "d94d382aaf09f714d23c7bb5f476e1d7d2522ae96b5f5a2cc371d9c57b098419",
+  "backup": "C:\\Users\\QX\\Downloads\\HEDGE-HPRL-LearningIntegrity-V1-R3-Backup-20260819-215415",
+  "zero_volume_policy": "allow-local-zero; floor-liquidity-proxy-to-1-USDT; reject-all-zero-primary"
+}

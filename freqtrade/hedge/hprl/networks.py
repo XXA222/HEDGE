@@ -230,13 +230,33 @@ class SimbaGaussianActor(nn.Module):
 
 class DeterministicActor(nn.Module):
     def __init__(
-        self, obs_dim: int, action_dim: int, hidden_dim: int = 512, depth: int = 3
+        self,
+        obs_dim: int,
+        action_dim: int,
+        hidden_dim: int = 512,
+        depth: int = 3,
+        *,
+        output_temperature: float = 1.0,
+        output_mode: str = "sigmoid",
     ) -> None:
         super().__init__()
+        if not math.isfinite(float(output_temperature)) or float(output_temperature) < 1.0:
+            raise ValueError("output_temperature must be finite and >= 1")
+        self.output_temperature = float(output_temperature)
+        mode = str(output_mode).strip().lower()
+        if mode not in {"sigmoid", "softsign", "tanh"}:
+            raise ValueError("output_mode must be sigmoid/softsign/tanh")
+        self.output_mode = mode
         self.net = mlp(obs_dim, hidden_dim, action_dim, depth, layer_norm=True)
 
     def forward(self, obs):
-        return torch.sigmoid(self.net(obs))
+        logits = self.net(obs) / self.output_temperature
+        if self.output_mode == "softsign":
+            # Polynomial tails preserve useful gradients much longer than a saturated sigmoid.
+            return 0.5 * (F.softsign(logits) + 1.0)
+        if self.output_mode == "tanh":
+            return 0.5 * (torch.tanh(logits) + 1.0)
+        return torch.sigmoid(logits)
 
 
 class ScalarTwinCritic(nn.Module):

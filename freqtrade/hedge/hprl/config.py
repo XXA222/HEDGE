@@ -269,6 +269,13 @@ class HPRLTrainingConfig:
     health_advantage_std_min: float = 1e-7
     health_entropy_min: float = 1e-3
     health_action_saturation_max: float = 0.98
+    health_action_std_min: float = 1e-4
+    health_boundary_fraction_max: float = 0.98
+    health_fail_mode: str = "stop"
+    health_capture_trace: bool = True
+    fast_td3_actor_temperature: float = 2.0
+    fast_td3_actor_output_mode: str = "softsign"
+    fast_td3_tier_exploration_epsilon: float = 0.10
     cuda_memory_fraction: float | None = None
     # Fraction of maximum categorical tier entropy targeted by SAC-family policies.
     tier_entropy_target_fraction: float = 0.65
@@ -363,9 +370,26 @@ class HPRLTrainingConfig:
             self.replay_prefetch,
             self.replay_reuse_sample_buffers,
             self.flow_obs_projection_reuse,
+            self.health_capture_trace,
         )
         if any(not isinstance(value, bool) for value in booleans):
             raise HPRLConfigError("training acceleration flags must be booleans")
+        health_fail_mode = (
+            self.health_fail_mode.strip().lower()
+            if isinstance(self.health_fail_mode, str)
+            else ""
+        )
+        if health_fail_mode not in {"stop", "warn"}:
+            raise HPRLConfigError("health_fail_mode must be stop/warn")
+        object.__setattr__(self, "health_fail_mode", health_fail_mode)
+        fast_td3_actor_output_mode = (
+            self.fast_td3_actor_output_mode.strip().lower()
+            if isinstance(self.fast_td3_actor_output_mode, str)
+            else ""
+        )
+        if fast_td3_actor_output_mode not in {"sigmoid", "softsign", "tanh"}:
+            raise HPRLConfigError("fast_td3_actor_output_mode must be sigmoid/softsign/tanh")
+        object.__setattr__(self, "fast_td3_actor_output_mode", fast_td3_actor_output_mode)
         amp_dtype = self.amp_dtype.strip().lower() if isinstance(self.amp_dtype, str) else ""
         if amp_dtype not in {"auto", "float16", "bfloat16"}:
             raise HPRLConfigError("amp_dtype must be auto/float16/bfloat16")
@@ -468,6 +492,10 @@ class HPRLTrainingConfig:
             self.health_advantage_std_min,
             self.health_entropy_min,
             self.health_action_saturation_max,
+            self.health_action_std_min,
+            self.health_boundary_fraction_max,
+            self.fast_td3_actor_temperature,
+            self.fast_td3_tier_exploration_epsilon,
         )
         if not _finite(*scalars):
             raise HPRLConfigError("training scalar parameters must be finite")
@@ -490,6 +518,14 @@ class HPRLTrainingConfig:
             raise HPRLConfigError("training health thresholds must be non-negative")
         if self.health_action_saturation_max > 1.0:
             raise HPRLConfigError("health_action_saturation_max cannot exceed 1")
+        if self.health_action_std_min < 0.0:
+            raise HPRLConfigError("health_action_std_min must be non-negative")
+        if not 0.0 <= self.health_boundary_fraction_max <= 1.0:
+            raise HPRLConfigError("health_boundary_fraction_max must be within [0, 1]")
+        if self.fast_td3_actor_temperature < 1.0:
+            raise HPRLConfigError("fast_td3_actor_temperature must be >= 1")
+        if not 0.0 <= self.fast_td3_tier_exploration_epsilon <= 1.0:
+            raise HPRLConfigError("fast_td3_tier_exploration_epsilon must be within [0, 1]")
         if not 0 <= self.tier_entropy_target_fraction <= 1:
             raise HPRLConfigError("tier_entropy_target_fraction must be in [0, 1]")
         if self.cuda_memory_fraction is not None:

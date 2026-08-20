@@ -1,0 +1,1 @@
+"""HPRL ETH strategy profiles."""

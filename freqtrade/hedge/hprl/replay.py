@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .device import require_torch, torch_device
+from .diagnostics import validate_replay_transition_finite
 from .memory import replay_nbytes
 
 
@@ -224,7 +225,7 @@ class TensorReplayBuffer:
             self._add_stage_rows = int(rows)
         return self._add_stage_storage
 
-    def add(self, obs, action, reward, next_obs, done) -> None:
+    def add(self, obs, action, reward, next_obs, done, *, context=None) -> None:
         self._assert_open()
         torch = self.torch
         obs = obs.reshape(-1, self.obs_dim).to(
@@ -248,8 +249,10 @@ class TensorReplayBuffer:
         if not (action.shape[0] == reward.shape[0] == next_obs.shape[0] == done.shape[0] == n):
             raise ValueError("replay batch dimensions are inconsistent")
         values = (obs, action, reward, next_obs, done)
-        if any(not torch.isfinite(value).all() for value in values):
-            raise ValueError("replay transitions must be finite")
+        validate_replay_transition_finite(
+            obs=obs, action=action, reward=reward, next_obs=next_obs, done=done,
+            context=context,
+        )
         if ((done < 0) | (done > 1)).any():
             raise ValueError("replay done flags must be within [0, 1]")
         if n >= self.capacity:

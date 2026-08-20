@@ -222,7 +222,11 @@ def off_policy_health_metrics(agent, batch) -> dict[str, object]:
         # RNG or alter the subsequent training trajectory merely because metrics are enabled.
         policy_action = agent.act(batch.obs, deterministic=True).float()
         action_2d = policy_action.reshape(policy_action.shape[0], -1).clamp(0.0, 1.0)
-        saturation = ((action_2d <= 0.02) | (action_2d >= 0.98)).float().mean()
+        flat_saturation = (action_2d <= 0.02).float().mean()
+        heavy_saturation = (action_2d >= 0.98).float().mean()
+        saturation = flat_saturation + heavy_saturation
+        policy_action_mean = action_2d.mean()
+        policy_action_std = action_2d.std(unbiased=False)
         bins = 16
         encoded = torch.clamp((action_2d * bins).long(), 0, bins - 1)
         entropies = []
@@ -249,6 +253,10 @@ def off_policy_health_metrics(agent, batch) -> dict[str, object]:
     return {
         "policy_entropy": policy_entropy,
         "action_saturation": saturation,
+        "policy_action_mean": policy_action_mean,
+        "policy_action_std": policy_action_std,
+        "flat_saturation": flat_saturation,
+        "heavy_saturation": heavy_saturation,
         "advantage_std": advantage_std,
     }
 

@@ -1,0 +1,63 @@
+{
+  "backup": [
+    {
+      "bytes": 14404,
+      "path": "freqtrade/hedge/hprl/algorithms/base.py",
+      "sha256": "fdc953df4000b76ec3fde1708b66ffb161242115514710a689023cedd44c8c36"
+    },
+    {
+      "bytes": 6374,
+      "path": "freqtrade/hedge/hprl/algorithms/fast_td3.py",
+      "sha256": "5a6fbc061e2da19be477511a8fe8261273f4b8b7ebcfc70b662d2346f95e2e60"
+    },
+    {
+      "bytes": 27939,
+      "path": "freqtrade/hedge/hprl/config.py",
+      "sha256": "fa74bf038c1aa1562ab40ce178fa7c2e888c35cc65dcfefa54262fedee6ad5c8"
+    },
+    {
+      "bytes": 16267,
+      "path": "freqtrade/hedge/hprl/networks.py",
+      "sha256": "a0dddb0a1c932b55a76ddc92abcd44726567a61e1d0a16c2715c798073ad0f64"
+    },
+    {
+      "bytes": 16854,
+      "path": "freqtrade/hedge/hprl/replay.py",
+      "sha256": "9214fb21bae5b9299d301d6fe5f53bd737edea14e601f30a5471d78b7efbda6a"
+    },
+    {
+      "bytes": 19917,
+      "path": "freqtrade/hedge/hprl/trainer.py",
+      "sha256": "acbfcd857d9a277ad15194a8495d52b7db0a3e6b42826d8a2c895e0a9e9f78e8"
+    },
+    {
+      "bytes": 10826,
+      "path": "freqtrade/hedge/telemetry/training_health.py",
+      "sha256": "8d1d920e4bb806f184f92cc4e1dfbdb5709fef24d96f465f87b7f78142f0a583"
+    },
+    {
+      "bytes": 1470,
+      "path": "tools/Run-HPRL-Eth-TwoYear-Research.ps1",
+      "sha256": "002bc79fdddb322283027654bd53535e96764fef479d6db378fdb8d432d99776"
+    },
+    {
+      "bytes": 23734,
+      "path": "tools/train_hprl_eth_two_year.py",
+      "sha256": "6ba5615f546b1f561d0f27e2734707282b07b55f29082a728367632bb6d525c7"
+    }
+  ],
+  "backup_root": "C:\\Users\\QX\\Downloads\\HEDGE-HPRL-LearningIntegrity-V1-R2-Backup-20260819-214420",
+  "base_commit": "395493fd23cb31ad63af0ebd2c72c612c7967293",
+  "installed_at": "2026-08-19T13:44:20.947257+00:00",
+  "new_files": [
+    "freqtrade/hedge/hprl/checkpoint_resume.py",
+    "freqtrade/hedge/hprl/diagnostics.py",
+    "freqtrade/hedge/hprl/exchange_risk.py",
+    "freqtrade/hedge/hprl/qualification.py",
+    "tests/hedge/hprl/learning_integrity_v1/test_learning_integrity_runtime.py",
+    "tests/hedge/hprl/learning_integrity_v1/test_learning_integrity_source.py",
+    "tools/validate_hprl_learning_integrity_v1.py"
+  ],
+  "release": "hprl-learning-integrity-v1-r2-20260819",
+  "source_head_before_install": "395493fd23cb31ad63af0ebd2c72c612c7967293"
+}

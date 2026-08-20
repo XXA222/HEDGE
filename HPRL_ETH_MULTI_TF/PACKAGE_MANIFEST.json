@@ -1,0 +1,24 @@
+{
+  "package": "HPRL_ETH_MULTI_TF",
+  "repository_target": "XXA222/HEDGE",
+  "algorithms": [
+    "fast_td3",
+    "fast_dsac",
+    "simba_sac",
+    "xqc",
+    "rebrac_v2"
+  ],
+  "timeframes": [
+    "1m",
+    "5m",
+    "15m",
+    "1h",
+    "8h",
+    "1d"
+  ],
+  "period": [
+    "2024-08-19T00:00:00Z",
+    "2026-08-19T00:00:00Z"
+  ],
+  "syntax_checked": true
+}

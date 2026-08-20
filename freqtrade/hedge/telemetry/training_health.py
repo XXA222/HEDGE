@@ -1,10 +1,9 @@
 """Shared neural-network and reinforcement-learning health telemetry.
 
-The helpers in this module are deliberately model-agnostic.  They observe gradients,
-parameter movement and policy statistics without changing activations, losses or optimizer
-behaviour.  Expensive parameter snapshots are intended to be taken at a configurable interval.
+The helpers observe gradients, parameter movement and policy statistics without changing
+activations, losses or optimizer behaviour.  The rolling detector is deliberately fail-closed
+for sustained policy degeneracy: a policy can be unusable even before gradients themselves die.
 """
-
 from __future__ import annotations
 
 import math
@@ -30,8 +29,6 @@ class GradientTelemetry:
 
 
 def _layer_name(parameter_name: str) -> str:
-    """Collapse weight/bias parameters into a stable layer identifier."""
-
     head, separator, tail = parameter_name.rpartition(".")
     if separator and tail in {"weight", "bias"}:
         return head or parameter_name
@@ -40,8 +37,6 @@ def _layer_name(parameter_name: str) -> str:
 
 @torch.no_grad()
 def snapshot_parameters(parameters: NamedParameters) -> ParameterSnapshot:
-    """Clone trainable parameters for an occasional post-step update measurement."""
-
     return {
         name: parameter.detach().clone()
         for name, parameter in parameters
@@ -55,8 +50,6 @@ def measure_gradients(
     *,
     near_zero_threshold: float = 1e-12,
 ) -> GradientTelemetry:
-    """Measure global/per-layer norms and the fraction of near-zero gradient elements."""
-
     if not math.isfinite(near_zero_threshold) or near_zero_threshold < 0.0:
         raise ValueError("near_zero_threshold must be finite and non-negative")
     gradient_squared = 0.0
@@ -97,8 +90,6 @@ def measure_parameter_update(
     *,
     epsilon: float = 1e-12,
 ) -> tuple[float, dict[str, float]]:
-    """Return actual ``||delta parameter|| / ||parameter||`` globally and per layer."""
-
     if not math.isfinite(epsilon) or epsilon <= 0.0:
         raise ValueError("epsilon must be finite and positive")
     delta_squared = 0.0
@@ -139,6 +130,8 @@ class CollapseThresholds:
     advantage_std_min: float = 1e-7
     entropy_min: float = 1e-3
     action_saturation_max: float = 0.98
+    action_std_min: float = 1e-4
+    boundary_fraction_max: float = 0.98
 
     def __post_init__(self) -> None:
         if self.window < 2 or self.patience < 1:
@@ -149,16 +142,23 @@ class CollapseThresholds:
             self.advantage_std_min,
             self.entropy_min,
             self.action_saturation_max,
+            self.action_std_min,
+            self.boundary_fraction_max,
         )
         if not all(math.isfinite(value) and value >= 0.0 for value in numeric):
             raise ValueError("collapse thresholds must be finite and non-negative")
-        if self.action_saturation_max > 1.0:
-            raise ValueError("action_saturation_max cannot exceed 1")
+        if self.action_saturation_max > 1.0 or self.boundary_fraction_max > 1.0:
+            raise ValueError("fraction thresholds cannot exceed 1")
 
 
 @dataclass(slots=True)
 class RollingCollapseDetector:
-    """Detect sustained learning collapse while resisting one-batch noise."""
+    """Detect sustained learning collapse while resisting one-batch noise.
+
+    Unlike the legacy detector, sustained behavioral policy degeneracy is independently fatal.
+    A zero-entropy, boundary-saturated policy is not required to wait for parameter updates to
+    become exactly zero before the candidate is rejected.
+    """
 
     thresholds: CollapseThresholds = field(default_factory=CollapseThresholds)
     _history: dict[str, deque[float]] = field(default_factory=dict, init=False, repr=False)
@@ -176,6 +176,10 @@ class RollingCollapseDetector:
             return None
         return sum(values) / len(values)
 
+    def snapshot(self) -> dict[str, tuple[float, ...]]:
+        """Return bounded rolling evidence for reports/checkpoints."""
+        return {name: tuple(values) for name, values in self._history.items()}
+
     def update(self, metrics: Mapping[str, float]) -> dict[str, float]:
         aliases = {
             "global_grad_norm": ("global_grad_norm",),
@@ -186,6 +190,10 @@ class RollingCollapseDetector:
             "value_update_ratio": ("value_update_ratio", "critic_update_ratio"),
             "policy_entropy": ("policy_entropy", "tier_entropy_mean"),
             "action_saturation": ("action_saturation",),
+            "policy_action_mean": ("policy_action_mean",),
+            "policy_action_std": ("policy_action_std",),
+            "flat_saturation": ("flat_saturation",),
+            "heavy_saturation": ("heavy_saturation",),
             "advantage_std": ("advantage_std",),
         }
         for canonical, candidates in aliases.items():
@@ -211,9 +219,8 @@ class RollingCollapseDetector:
         value_grad_collapsed = ready_for("value_grad_norm") and (
             self._mean("value_grad_norm") or 0.0
         ) <= self.thresholds.gradient_norm_min
-        grad_collapsed = (
-            global_grad_collapsed or policy_grad_collapsed or value_grad_collapsed
-        )
+        grad_collapsed = global_grad_collapsed or policy_grad_collapsed or value_grad_collapsed
+
         global_update_collapsed = ready_for("parameter_update_ratio") and (
             self._mean("parameter_update_ratio") or 0.0
         ) <= self.thresholds.update_ratio_min
@@ -226,6 +233,7 @@ class RollingCollapseDetector:
         update_collapsed = (
             global_update_collapsed or policy_update_collapsed or value_update_collapsed
         )
+
         advantage_mean = self._mean("advantage_std")
         advantage_collapsed = (
             ready_for("advantage_std")
@@ -234,7 +242,8 @@ class RollingCollapseDetector:
         )
         entropy_mean = self._mean("policy_entropy")
         saturation_mean = self._mean("action_saturation")
-        policy_collapsed = (
+        action_std_mean = self._mean("policy_action_std")
+        low_entropy_boundary = (
             ready_for("policy_entropy")
             and ready_for("action_saturation")
             and entropy_mean is not None
@@ -242,8 +251,41 @@ class RollingCollapseDetector:
             and entropy_mean <= self.thresholds.entropy_min
             and saturation_mean >= self.thresholds.action_saturation_max
         )
-        evidence = grad_collapsed or (
-            update_collapsed and (advantage_collapsed or policy_collapsed)
+        low_action_variation = (
+            ready_for("policy_action_std")
+            and action_std_mean is not None
+            and action_std_mean <= self.thresholds.action_std_min
+        )
+        policy_no_diversity = bool(
+            ready_for("policy_entropy")
+            and entropy_mean is not None
+            and entropy_mean <= self.thresholds.entropy_min
+            and low_action_variation
+        )
+        # Boundary saturation is especially dangerous for bounded actors, but a policy that
+        # collapses to one interior tier is also behaviorally degenerate over a diverse replay batch.
+        policy_collapsed = bool((low_entropy_boundary and low_action_variation) or policy_no_diversity)
+
+        flat_mean = self._mean("flat_saturation")
+        heavy_mean = self._mean("heavy_saturation")
+        policy_flat_collapsed = (
+            policy_collapsed
+            and ready_for("flat_saturation")
+            and flat_mean is not None
+            and flat_mean >= self.thresholds.boundary_fraction_max
+        )
+        policy_heavy_collapsed = (
+            policy_collapsed
+            and ready_for("heavy_saturation")
+            and heavy_mean is not None
+            and heavy_mean >= self.thresholds.boundary_fraction_max
+        )
+
+        # Behavioral degeneracy is independently fatal.  Waiting for optimizer updates to hit
+        # literal zero allowed the ETH FastTD3 run to pass baseline/optimization while already
+        # producing a zero-entropy, 100%-saturated policy.
+        evidence = policy_collapsed or grad_collapsed or (
+            update_collapsed and advantage_collapsed
         )
         if ready and evidence:
             self._collapse_streak += 1
@@ -255,6 +297,9 @@ class RollingCollapseDetector:
             "gradient_collapse": float(ready and grad_collapsed),
             "update_collapse": float(ready and update_collapsed),
             "policy_collapse": float(ready and policy_collapsed),
+            "policy_no_diversity": float(ready and policy_no_diversity),
+            "policy_flat_collapse": float(ready and policy_flat_collapsed),
+            "policy_heavy_collapse": float(ready and policy_heavy_collapsed),
             "policy_gradient_collapse": float(policy_grad_collapsed),
             "value_gradient_collapse": float(value_grad_collapsed),
             "policy_update_collapse": float(policy_update_collapsed),

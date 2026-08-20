@@ -33,6 +33,8 @@ def _training_health_detector(config: HPRLTrainingConfig) -> RollingCollapseDete
             advantage_std_min=config.health_advantage_std_min,
             entropy_min=config.health_entropy_min,
             action_saturation_max=config.health_action_saturation_max,
+            action_std_min=config.health_action_std_min,
+            boundary_fraction_max=config.health_boundary_fraction_max,
         )
     )
 
@@ -45,6 +47,9 @@ class TrainingSummary:
     final_equity_mean: float
     group_resets: int
     last_metrics: dict[str, float]
+    early_stopped: bool = False
+    stop_reason: str = ""
+    health_events: tuple[dict[str, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,7 +237,13 @@ class OnlineTrainer:
         group_resets = 0
         last_metrics: dict[str, float] = {}
         last_equity = self.env.equity
-        for _ in range(environment_steps):
+        health_events: list[dict[str, float]] = []
+        early_stopped = False
+        stop_reason = ""
+        stop_requested = False
+        executed_environment_steps = 0
+        for environment_step in range(environment_steps):
+            executed_environment_steps = environment_step + 1
             if transitions < self.config.warmup_steps:
                 action = self._warmup_action()
             else:
@@ -249,7 +260,13 @@ class OnlineTrainer:
             replay_reward = step.reward
             if self.reward_normalizer is not None:
                 replay_reward = self.reward_normalizer.normalize(step.reward, replay_done)
-            self.buffer.add(obs, executed_action, replay_reward, step.observation, replay_done)
+            self.buffer.add(
+                obs, executed_action, replay_reward, step.observation, replay_done,
+                context={
+                    "environment_step": environment_step,
+                    "transitions_before_add": transitions,
+                },
+            )
             transitions += self.env.envs
             obs = step.observation
             last_equity = step.info["equity"]
@@ -282,28 +299,50 @@ class OnlineTrainer:
                     if metrics.values:
                         last_metrics = dict(metrics.values)
                         health_input = dict(last_metrics)
-                        if health_input.get("stage") == 0.0:
+                        if (
+                            health_input.get("stage") == 0.0
+                            or health_input.get("actor_updated") == 0.0
+                        ):
                             health_input.pop("actor_grad_norm", None)
                             health_input.pop("actor_update_ratio", None)
                         last_metrics.update(
                             self.training_health_detector.update(health_input)
                         )
+                        if self.config.health_capture_trace:
+                            health_events.append(dict(last_metrics))
+                            if len(health_events) > 64:
+                                del health_events[0]
                         if last_metrics["training_health_collapsed"]:
                             logger.warning(
                                 "HPRL online training health collapse detected: %s",
                                 last_metrics,
                             )
+                            if self.config.health_fail_mode == "stop":
+                                early_stopped = True
+                                stop_reason = (
+                                    "policy_degeneracy"
+                                    if last_metrics.get("policy_collapse", 0.0) >= 1.0
+                                    else "training_health_collapse"
+                                )
+                                stop_requested = True
                     updates += 1
+                    if stop_requested:
+                        break
+            if stop_requested:
+                break
             if group_done:
                 group_resets += 1
                 obs, _ = self.env.reset()
         return TrainingSummary(
-            environment_steps=environment_steps,
+            environment_steps=executed_environment_steps,
             transitions=transitions,
             updates=updates,
             final_equity_mean=float(last_equity.mean().item()),
             group_resets=group_resets,
             last_metrics=last_metrics,
+            early_stopped=early_stopped,
+            stop_reason=stop_reason,
+            health_events=tuple(health_events),
         )
 
 

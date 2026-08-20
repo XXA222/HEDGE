@@ -45,7 +45,13 @@ class FastTD3Agent:
             ),
         )
         kwargs = dict(hidden_dim=config.hidden_dim, depth=config.hidden_depth)
-        self.actor = DeterministicActor(obs_dim, action_dim, **kwargs).to(self.device)
+        self.actor = DeterministicActor(
+            obs_dim,
+            action_dim,
+            output_temperature=config.fast_td3_actor_temperature,
+            output_mode=config.fast_td3_actor_output_mode,
+            **kwargs,
+        ).to(self.device)
         self.actor_target = copy.deepcopy(self.actor).to(self.device)
         self.critic = CategoricalTwinCritic(obs_dim, action_dim, **kwargs).to(self.device)
         self.critic_target = copy.deepcopy(self.critic).to(self.device)
@@ -85,6 +91,13 @@ class FastTD3Agent:
             action = self.actor(obs.to(self.device, non_blocking=True))
         if not deterministic:
             action = action + torch.randn_like(action) * self.exploration_noise
+            level_count = int(getattr(self, "action_level_count", 0) or 0)
+            epsilon = float(self.config.fast_td3_tier_exploration_epsilon)
+            if level_count >= 2 and epsilon > 0.0:
+                random_index = torch.randint(0, level_count, action.shape, device=action.device)
+                random_tier = random_index.to(action.dtype) / float(level_count - 1)
+                tier_mask = torch.rand_like(action) < epsilon
+                action = torch.where(tier_mask, random_tier, action)
         return action_for_critic(self, action.float().clamp(0.0, 1.0), straight_through=False)
 
     def update(self, batch, *, collect_metrics: bool = True) -> UpdateMetrics:
@@ -152,5 +165,6 @@ class FastTD3Agent:
             "actor_grad_norm": actor_grad,
             "critic_update_ratio": critic_update_ratio,
             "actor_update_ratio": actor_update_ratio,
+            "actor_updated": float(self.update_count % self.policy_delay == 0),
             **off_policy_health_metrics(self, batch),
         })
