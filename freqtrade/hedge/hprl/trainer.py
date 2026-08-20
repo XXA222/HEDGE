@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from ..telemetry.training_health import CollapseThresholds, RollingCollapseDetector
+from freqtrade.hedge.telemetry.training_health import CollapseThresholds, RollingCollapseDetector
+
 from .action_space import canonicalize_offline_action_tensor
 from .config import HPRLActionConfig, HPRLMemoryConfig, HPRLTrainingConfig
 from .device import require_torch, seed_everything, torch_device
@@ -57,6 +58,9 @@ class OfflineTrainingSummary:
     updates: int
     samples_seen: int
     last_metrics: dict[str, float]
+    early_stopped: bool = False
+    stop_reason: str = ""
+    health_events: tuple[dict[str, float], ...] = ()
 
 
 class DiscountedReturnNormalizer:
@@ -221,9 +225,9 @@ class OnlineTrainer:
             return batch
         # Prefetch disabled: preserve correctness with the single sampled batch.
         # The high-throughput path above uses bounded multi-slot pinned/device staging.
-        return batch.to(self.agent.device, non_blocking=not self.buffer.pin_memory)
+        return batch.to(self.agent.device, non_blocking=self.buffer.pin_memory)
 
-    def run(self, environment_steps: int) -> TrainingSummary:
+    def run(self, environment_steps: int) -> TrainingSummary:  # noqa: C901
         if environment_steps < 1:
             raise ValueError("environment_steps must be positive")
         seed_everything(
@@ -394,7 +398,7 @@ class OfflineTrainer:
             raise ValueError("offline dataset dimensions must be positive")
         self.training_health_detector = _training_health_detector(config)
 
-    def run(self, updates: int) -> OfflineTrainingSummary:
+    def run(self, updates: int) -> OfflineTrainingSummary:  # noqa: C901
         if updates < 1:
             raise ValueError("offline updates must be positive")
         seed_everything(
@@ -419,7 +423,8 @@ class OfflineTrainer:
                 * 4
             )
             state = cuda_memory_state(self.device)
-            assert state is not None
+            if state is None:
+                raise RuntimeError("CUDA memory state is unavailable")
             reserve = reserve_bytes_for(state, self.memory_config)
             budget = max(
                 0,
@@ -460,7 +465,11 @@ class OfflineTrainer:
         if callable(calibrate):
             calibrate(values["reward"], values["done"])
         last_metrics: dict[str, float] = {}
-        for _ in range(updates):
+        health_events: list[dict[str, float]] = []
+        completed_updates = 0
+        early_stopped = False
+        stop_reason = ""
+        for update_index in range(updates):
             idx = torch.randint(
                 0, rows, (self.config.batch_size,), device=storage_device
             )
@@ -474,25 +483,53 @@ class OfflineTrainer:
             if torch.device(batch.obs.device) != self.device:
                 batch = batch.to(self.device, non_blocking=False)
             collect_metrics = (
-                _ == 0 or (_ + 1) % self.config.metrics_interval == 0 or _ + 1 == updates
+                update_index == 0
+                or (update_index + 1) % self.config.metrics_interval == 0
+                or update_index + 1 == updates
             )
             metrics = self.agent.update(batch, collect_metrics=collect_metrics)
+            completed_updates = update_index + 1
             if metrics.values:
                 last_metrics = dict(metrics.values)
                 health_input = dict(last_metrics)
                 if health_input.get("stage") == 0.0:
                     health_input.pop("actor_grad_norm", None)
                     health_input.pop("actor_update_ratio", None)
-                last_metrics.update(self.training_health_detector.update(health_input))
+                health_metrics = self.training_health_detector.update(health_input)
+                last_metrics.update(health_metrics)
+                if self.config.health_capture_trace:
+                    health_events.append(
+                        {
+                            "update": float(completed_updates),
+                            **{
+                                key: float(value)
+                                for key, value in last_metrics.items()
+                                if isinstance(value, (int, float))
+                            },
+                        }
+                    )
+                    if len(health_events) > 64:
+                        health_events.pop(0)
                 if last_metrics["training_health_collapsed"]:
                     logger.warning(
                         "HPRL offline training health collapse detected: %s",
                         last_metrics,
                     )
+                    if self.config.health_fail_mode == "stop":
+                        early_stopped = True
+                        stop_reason = (
+                            "policy_degeneracy"
+                            if last_metrics.get("policy_collapse", 0.0) >= 1.0
+                            else "training_health_collapse"
+                        )
+                        break
         return OfflineTrainingSummary(
-            updates=updates,
-            samples_seen=updates * self.config.batch_size,
+            updates=completed_updates,
+            samples_seen=completed_updates * self.config.batch_size,
             last_metrics=last_metrics,
+            early_stopped=early_stopped,
+            stop_reason=stop_reason,
+            health_events=tuple(health_events),
         )
 
 

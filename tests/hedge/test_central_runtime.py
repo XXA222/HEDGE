@@ -61,6 +61,7 @@ def test_runtime_publishes_atomic_ready_projection() -> None:
         net_notional=Decimal(3100),
     )
     checks = {
+        "common.persistence_healthy": True,
         "readonly_service_bound": True,
         "rest_calibrated": True,
         "user_stream_fresh": True,

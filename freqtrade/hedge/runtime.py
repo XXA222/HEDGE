@@ -127,7 +127,8 @@ class HedgeRuntime:
 
     - readonly and shadow: EXCHANGE facts are authoritative;
     - paper: PAPER simulation is authoritative for the simulated account;
-    - live: LIVE execution is authoritative, while EXCHANGE remains a fact input.
+    - LIVE remains a reserved projection namespace and cannot be published until
+      a separately qualified production-live control plane is implemented.
 
     A halt is scoped to SYSTEM or a source.  Publishing PAPER can therefore never
     clear an EXCHANGE or SYSTEM halt.
@@ -162,10 +163,9 @@ class HedgeRuntime:
             return HedgeProjectionSource.EXCHANGE
         if mode == "paper":
             return HedgeProjectionSource.PAPER
-        if mode == "live":
-            return HedgeProjectionSource.LIVE
-        # Configuration validation should reject this first.  Keep a safe default.
-        return HedgeProjectionSource.EXCHANGE
+        raise RuntimeError(
+            f"unsupported HEDGE operation mode reached runtime: {mode!r}"
+        )
 
     @staticmethod
     def _normalize_status(reconciliation_status: str, stream_state: str) -> tuple[str, str]:
@@ -189,6 +189,10 @@ class HedgeRuntime:
         source: HedgeProjectionSource,
         checks: Mapping[str, bool],
     ) -> dict[str, bool]:
+        if source is HedgeProjectionSource.LIVE:
+            raise ValueError(
+                "LIVE projection is reserved and unsupported by the central runtime"
+            )
         normalized: dict[str, bool] = {}
         for raw_name, value in checks.items():
             if not isinstance(raw_name, str) or not raw_name.strip():
@@ -201,13 +205,6 @@ class HedgeRuntime:
             if source is HedgeProjectionSource.EXCHANGE:
                 name = _LEGACY_EXCHANGE_CHECK_NAMES.get(name, name)
             normalized[name] = value
-
-        # Older EXCHANGE publishers did not have an explicit persistence check.
-        if (
-            source is HedgeProjectionSource.EXCHANGE
-            and "common.persistence_healthy" not in normalized
-        ):
-            normalized["common.persistence_healthy"] = True
 
         required = set(_REQUIRED_CHECKS[source])
         if set(normalized) != required:

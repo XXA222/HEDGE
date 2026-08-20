@@ -1,0 +1,176 @@
+{
+  "schema": "hprl-freqtrade-mtf-source-validation-v3",
+  "status": "SOURCE_STATIC_CHECK_OK_TESTS_DEFERRED",
+  "python_files_parsed": 13,
+  "strategies": 5,
+  "base_timeframes": [
+    "1m",
+    "5m",
+    "15m",
+    "1h",
+    "8h",
+    "1d"
+  ],
+  "mtf_inputs": {
+    "1m": [
+      "1m",
+      "5m",
+      "15m",
+      "1h",
+      "8h",
+      "1d"
+    ],
+    "5m": [
+      "5m",
+      "15m",
+      "1h",
+      "8h",
+      "1d"
+    ],
+    "15m": [
+      "15m",
+      "1h",
+      "8h",
+      "1d"
+    ],
+    "1h": [
+      "1h",
+      "8h",
+      "1d"
+    ],
+    "8h": [
+      "8h",
+      "1d"
+    ],
+    "1d": [
+      "1d"
+    ]
+  },
+  "formal_backtest_tasks_available_for_later": 30,
+  "training_executed": false,
+  "backtests_executed": false,
+  "performance_test_executed": false,
+  "errors": [],
+  "files": [
+    {
+      "path": "artifact_contract.py",
+      "size": 7739,
+      "sha256": "abe3263f94b92ec3ea643d3d14fcc20e5e0d2792fb73195cbef2306156e18575"
+    },
+    {
+      "path": "configs/fast_dsac.json",
+      "size": 1691,
+      "sha256": "5e89aabdcae0642ad85cf19816eac636dafa6353f6155d6d90afde68de1bfc72"
+    },
+    {
+      "path": "configs/fast_td3.json",
+      "size": 1690,
+      "sha256": "d992b2c1a192a12fb247df7a9bf3b37a27e18876b65bc33d4dae800c85a05f02"
+    },
+    {
+      "path": "configs/rebrac_v2.json",
+      "size": 1691,
+      "sha256": "c445dd2f42a38cb998db1bc7a713b9d99122f5ba2e9a915129f6780254a05604"
+    },
+    {
+      "path": "configs/simba_sac.json",
+      "size": 1691,
+      "sha256": "6b96f3e8ee26e4beea79b6201ce14e9f28690e9282e954bbe1f1585e69927f64"
+    },
+    {
+      "path": "configs/xqc.json",
+      "size": 1686,
+      "sha256": "d6c0bc24dd1a7e26d3c4fe7ee7cbad7771d93915688cfd354390b264dd1d2e3c"
+    },
+    {
+      "path": "features.py",
+      "size": 18933,
+      "sha256": "ff338ed4c83ae35a6668a331d618950435168adf6422d942d4942aa80c2f1b76"
+    },
+    {
+      "path": "Install-HPRL-Freqtrade-MTF-V3.ps1",
+      "size": 3567,
+      "sha256": "346e9b7f05e21f18da847f140008855521790b4fcfe90eae79628d02908537fc"
+    },
+    {
+      "path": "prepare_models.py",
+      "size": 28089,
+      "sha256": "ff1d359b32581122fed644efeeb6bb8db897f24b3eec2deb0cca07f24db40826"
+    },
+    {
+      "path": "README_CN.md",
+      "size": 3260,
+      "sha256": "b94d27c12cbe4803cb47350f22117b1d90d67cfac49eda4b338f6d5d553f7897"
+    },
+    {
+      "path": "run_all.ps1",
+      "size": 1962,
+      "sha256": "065177f3435c47d357171f84ef1100fca91c9010f21d67beaf2e5824ddcdb968"
+    },
+    {
+      "path": "run_all.sh",
+      "size": 415,
+      "sha256": "9edd6c20bd5b5393bd3eafb7ee142dbcc79f288ce80d00412be94fdda5c01225"
+    },
+    {
+      "path": "run_suite.py",
+      "size": 18100,
+      "sha256": "83c24fbc974447d02d47969cc6126e3c192a4dac012bb013dc03b5f73987dbe6"
+    },
+    {
+      "path": "SOURCE_IMPROVEMENTS.md",
+      "size": 5812,
+      "sha256": "af59dfcbe5de9768f95c5839934463dd84026a2b530cd1570c9a32c4203daa7b"
+    },
+    {
+      "path": "strategies/__init__.py",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "strategies/hprl_fast_dsac_eth.py",
+      "size": 147,
+      "sha256": "a45620493a28275754fad1eb482c3b06d661c905ab24594cf4de65bc79dd9170"
+    },
+    {
+      "path": "strategies/hprl_fast_td3_eth.py",
+      "size": 145,
+      "sha256": "65292f5709de733275d33a0ebd98bbb0c1835bae4e3e4ad7eb6ac8b848f7611c"
+    },
+    {
+      "path": "strategies/hprl_mtf_v3_base.py",
+      "size": 26709,
+      "sha256": "a9f2e808b62e740fbd4d56c4f7d7278593a24b18ce698cc10b7e344a519c18e7"
+    },
+    {
+      "path": "strategies/hprl_rebrac_v2_eth.py",
+      "size": 147,
+      "sha256": "7824e587782d504cea7e615b5ba38877cb1435f691c8ffcef3ff686b93fe93d6"
+    },
+    {
+      "path": "strategies/hprl_simba_sac_eth.py",
+      "size": 147,
+      "sha256": "08a38d1ad3c8629fb827006f798c99c2628c8d8001aca53392f3701e46d4f507"
+    },
+    {
+      "path": "strategies/hprl_xqc_eth.py",
+      "size": 136,
+      "sha256": "584191ba7464403d87a20b51fee348550365adecb95c4510924a0de5b916532f"
+    },
+    {
+      "path": "suite_specs.py",
+      "size": 7508,
+      "sha256": "fd916df805ef8ace8d7aa43701ff76be87aaedf7442a2aa746ea0f63dd49b27f"
+    },
+    {
+      "path": "V2_1_TO_V3_SOURCE.diff",
+      "size": 141994,
+      "sha256": "ecf63610fbf2be7d3338ad6b0c558c1ae44866197d5b9d4372749b381e400655"
+    },
+    {
+      "path": "validate_suite.py",
+      "size": 6873,
+      "sha256": "c90b112580b38a0d5e2a2f10f3585e26ee1b7217ef2bfb30f7998565e947aa10"
+    }
+  ]
+}

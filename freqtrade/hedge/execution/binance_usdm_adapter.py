@@ -380,11 +380,16 @@ class BinanceUSDMExecutionAdapter(ExchangeExecutionPort):
         if not isinstance(payload, list):
             raise BinanceExecutionApiError("openOrders returned invalid payload")
         result: list[ExternalOrderSnapshot] = []
+        rejected_rows = 0
         for row in payload:
             try:
                 result.append(self._snapshot_from_order(row))
             except (TypeError, ValueError, BinanceExecutionApiError):
-                continue
+                rejected_rows += 1
+        if rejected_rows:
+            raise BinanceExecutionApiError(
+                f"openOrders snapshot incomplete: rejected_rows={rejected_rows}"
+            )
         return tuple(result)
 
     def list_recent_fills(

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ctypes
 import gc
+import inspect
 import logging
 import os
 from dataclasses import dataclass
@@ -103,7 +104,7 @@ class HedgeMemoryPolicy:
             raise ValueError("backtesting_cache_max_entries must be >= 1")
 
     @classmethod
-    def from_mapping(cls, values: object) -> "HedgeMemoryPolicy":
+    def from_mapping(cls, values: object) -> HedgeMemoryPolicy:
         mapping = values if isinstance(values, dict) else {}
         defaults = cls()
         kwargs: dict[str, Any] = {}
@@ -323,20 +324,39 @@ def pressure_cleanup(
     )
 
 
-def clear_dataprovider_caches(dataprovider: object, policy: HedgeMemoryPolicy | None = None) -> None:
+def clear_dataprovider_caches(
+    dataprovider: object,
+    policy: HedgeMemoryPolicy | None = None,
+) -> None:
     active = policy or HedgeMemoryPolicy()
     clear = getattr(dataprovider, "clear_cache", None)
     if not callable(clear):
         return
+
     try:
+        parameters = inspect.signature(clear).parameters
+    except (TypeError, ValueError):
+        clear()
+        return
+
+    if "include_backtesting" in parameters:
+        clear(include_backtesting=active.clear_backtesting_cache)
+        return
+
+    extended_names = {"backtesting", "external", "messages"}
+    has_var_kwargs = any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters.values()
+    )
+    if has_var_kwargs or extended_names.issubset(parameters):
         clear(
             backtesting=active.clear_backtesting_cache,
             external=active.clear_external_cache,
             messages=active.clear_message_cache,
         )
-    except TypeError:
-        # Compatibility with an unextended upstream DataProvider.
-        clear()
+        return
+
+    clear()
 
 
 def clear_exchange_caches(exchange: object, policy: HedgeMemoryPolicy | None = None) -> None:

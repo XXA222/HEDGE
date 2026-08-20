@@ -37,6 +37,38 @@ SOURCE_TOP_LEVEL_DIRS = {
     "tools",
     "user_data",
 }
+SOURCE_TOP_LEVEL_FILES = {
+    ".coveragerc",
+    ".dockerignore",
+    ".gitattributes",
+    ".gitignore",
+    ".pre-commit-config.yaml",
+    ".pylintrc",
+    ".readthedocs.yml",
+    "CLEAN-MAINLINE-ARCHITECTURE.md",
+    "CLEAN-MAINLINE-MANIFEST.json",
+    "CLEAN-MAINLINE-MIGRATION-REPORT.md",
+    "CLEAN-MAINLINE-VERSION.txt",
+    "CONTRIBUTING.md",
+    "Dockerfile",
+    "HEDGE-HPRL-MERGE-MANIFEST.json",
+    "HPRL-GPU-RUNTIME.md",
+    "HPRL-INTEGRATION.md",
+    "LICENSE",
+    "MANIFEST.in",
+    "README.md",
+    "docker-compose.yml",
+    "freqtrade.service",
+    "freqtrade.service.watchdog",
+    "mkdocs.yml",
+    "pyproject.toml",
+    "setup.ps1",
+    "setup.sh",
+}
+SOURCE_TOP_LEVEL_FILE_PATTERNS = (
+    re.compile(r"^requirements(?:-[A-Za-z0-9_.-]+)?\.txt$"),
+)
+WORKSPACE_IGNORED_ROOT_FILES = {".env"}
 WORKSPACE_IGNORED_DIRS = {
     ".claude",
     ".git",
@@ -181,14 +213,34 @@ def gate(name: str, passed: bool, detail: Any) -> dict[str, Any]:
     return {"name": name, "status": "PASS" if passed else "FAIL", "detail": detail}
 
 
-def check_layout(root: Path, workspace_mode: bool) -> dict[str, Any]:
+def check_layout(  # noqa: C901
+    root: Path,
+    workspace_mode: bool,
+) -> dict[str, Any]:
     findings: list[str] = []
     for directory in FORBIDDEN_MAINLINE_DIRS:
         if (root / directory).exists():
             findings.append(f"forbidden mainline directory: {directory}")
     for path in root.iterdir():
-        if path.is_file() and path.name.startswith(FORBIDDEN_ROOT_PREFIXES):
+        if path.is_dir():
+            if workspace_mode and (
+                path.name in WORKSPACE_IGNORED_DIRS or is_generated_dir(path.name)
+            ):
+                continue
+            if path.name not in SOURCE_TOP_LEVEL_DIRS:
+                findings.append(f"unexpected top-level directory: {path.name}")
+            continue
+        if workspace_mode and path.name in WORKSPACE_IGNORED_ROOT_FILES:
+            continue
+        if path.name.startswith(FORBIDDEN_ROOT_PREFIXES):
             findings.append(f"historical root file: {path.name}")
+            continue
+        allowed_root_file = (
+            path.name in SOURCE_TOP_LEVEL_FILES
+            or any(pattern.match(path.name) for pattern in SOURCE_TOP_LEVEL_FILE_PATTERNS)
+        )
+        if not allowed_root_file:
+            findings.append(f"unexpected top-level file: {path.name}")
     for path in root.rglob("*"):
         if workspace_mode and should_ignore_workspace_path(root, path):
             continue

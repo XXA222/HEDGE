@@ -1,0 +1,3114 @@
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/Install-HPRL-Freqtrade-MTF-V3.ps1 /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/Install-HPRL-Freqtrade-MTF-V3.ps1
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/Install-HPRL-Freqtrade-MTF-V3.ps1	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/Install-HPRL-Freqtrade-MTF-V3.ps1	2026-08-20 12:09:09.922304803 +0000
+@@ -0,0 +1,100 @@
++[CmdletBinding()]
++param(
++    [string] $RepoRoot = (Get-Location).Path,
++    [string] $DestinationName = "HPRL_FREQTRADE_MTF_V3"
++)
++
++$ErrorActionPreference = "Stop"
++$RepoRoot = [System.IO.Path]::GetFullPath($RepoRoot)
++$PackageRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
++$Destination = Join-Path $RepoRoot $DestinationName
++
++Write-Host "=== Install HPRL Freqtrade MTF V3 source ==="
++Write-Host ("RepoRoot    : " + $RepoRoot)
++Write-Host ("PackageRoot : " + $PackageRoot)
++Write-Host ("Destination : " + $Destination)
++
++$requiredRepo = @(
++    "freqtrade",
++    "freqtrade\hedge\hprl",
++    "freqtrade\hedge\production\hprl_hedge_adapter.py",
++    "freqtrade\data\dataprovider.py",
++    "freqtrade\strategy\interface.py"
++)
++foreach ($relative in $requiredRepo) {
++    $path = Join-Path $RepoRoot $relative
++    if (-not (Test-Path -LiteralPath $path)) {
++        throw ("HEDGE repository requirement is missing: " + $path)
++    }
++}
++
++$requiredPackage = @(
++    "artifact_contract.py",
++    "features.py",
++    "prepare_models.py",
++    "run_suite.py",
++    "suite_specs.py",
++    "strategies\hprl_mtf_v3_base.py",
++    "configs\fast_td3.json"
++)
++foreach ($relative in $requiredPackage) {
++    $path = Join-Path $PackageRoot $relative
++    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
++        throw ("Package requirement is missing: " + $path)
++    }
++}
++
++if (Test-Path -LiteralPath $Destination) {
++    $downloads = Join-Path $env:USERPROFILE "Downloads"
++    if (-not (Test-Path -LiteralPath $downloads -PathType Container)) {
++        New-Item -ItemType Directory -Path $downloads -Force | Out-Null
++    }
++    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
++    $backup = Join-Path $downloads ($DestinationName + "-backup-" + $stamp + ".zip")
++    Write-Host ("Backing up existing suite to: " + $backup)
++    Compress-Archive -LiteralPath $Destination -DestinationPath $backup -CompressionLevel Optimal
++    Remove-Item -LiteralPath $Destination -Recurse -Force
++}
++
++New-Item -ItemType Directory -Path $Destination -Force | Out-Null
++Get-ChildItem -LiteralPath $PackageRoot -Force | ForEach-Object {
++    Copy-Item -LiteralPath $_.FullName -Destination $Destination -Recurse -Force
++}
++
++$verifyFiles = @(
++    "artifact_contract.py",
++    "features.py",
++    "prepare_models.py",
++    "run_suite.py",
++    "suite_specs.py",
++    "strategies\hprl_mtf_v3_base.py"
++)
++foreach ($relative in $verifyFiles) {
++    $source = Join-Path $PackageRoot $relative
++    $target = Join-Path $Destination $relative
++    $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $source).Hash
++    $targetHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $target).Hash
++    if ($sourceHash -ne $targetHash) {
++        throw ("Installed file hash mismatch: " + $relative)
++    }
++}
++
++$receipt = [ordered]@{
++    schema = "hprl-freqtrade-mtf-install-receipt-v1"
++    installed_at = (Get-Date).ToUniversalTime().ToString("o")
++    repo_root = $RepoRoot
++    destination = $Destination
++    source_package = $PackageRoot
++    tests_executed = $false
++    training_executed = $false
++    backtests_executed = $false
++}
++$receiptPath = Join-Path $Destination "SOURCE_INSTALL_RECEIPT.json"
++$receipt | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $receiptPath -Encoding UTF8
++
++Write-Host ""
++Write-Host "INSTALL COMPLETE"
++Write-Host ("Installed source: " + $Destination)
++Write-Host "No training or backtesting was executed by this installer."
++Write-Host "Future full suite entry point:"
++Write-Host ('  Set-ExecutionPolicy -Scope Process Bypass -Force; & "' + (Join-Path $Destination "run_all.ps1") + '" -RepoRoot "' + $RepoRoot + '"')
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/README_CN.md /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/README_CN.md
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/README_CN.md	2026-08-20 11:51:48.439610311 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/README_CN.md	2026-08-20 12:14:07.396188623 +0000
+@@ -1,220 +1,99 @@
+-# HPRL × HEDGE/Freqtrade 正式 Strategy 接入源码 V2.1
++# HPRL Freqtrade Multi-Timeframe V3
+ 
+-> 当前交付状态：**SOURCE REPAIR / TESTS DEFERRED**  
+-> 本轮只修复源码。没有执行模型训练、30 组 HEDGE/Freqtrade backtesting、收益评估或性能测试。
++这是 HEDGE 仓库的 HPRL -> Freqtrade Strategy -> HEDGE execution 源码套件。
+ 
+-## 1. 本版本的职责边界
++本版本重点是 **Freqtrade 原生 informative 多时间周期输入**。状态为：
+ 
+-本目录不是第二套 RL 框架，也不把 `HPRL_ETH_MULTI_TF/runner.py` 当成正式回测器。
++`SOURCE_REPAIRED_MTF_TESTS_DEFERRED`
+ 
+-正式设计为：
++当前交付未执行训练、30 组正式 backtesting 或性能验收。
+ 
+-```text
+-仓库 native HPRL
+-  create_agent()
+-  VectorizedHedgeEnv
+-  TieredHedgeActionCodec
+-  native checkpoint
+-        ↓
+-5 个真实 Freqtrade IStrategy
+-        ↓
+-HprlHedgeAdapter
+-        ↓
+-canonical hedge_* Strategy columns
+-        ↓
+-python -m freqtrade hedge-backtesting
+-        ↓
+-HEDGE planner / risk gate / matcher / funding / wallet
+-```
+-
+-HPRL 只负责模型、动作 tier 和 policy-state shadow；HEDGE/Freqtrade 负责正式历史数据生命周期和最终交易结果。
+-
+-## 2. 五个真实 Strategy
+-
+-| 模型 | Strategy class | 算法 |
+-|---|---|---|
+-| Fast-TD3 | `HPRLFastTD3ETHStrategy` | `fast_td3` |
+-| Fast-DSAC | `HPRLFastDSACETHStrategy` | `fast_dsac` |
+-| SimBa-SAC | `HPRLSimbaSACETHStrategy` | `simba_sac` |
+-| XQC | `HPRLXQCETHStrategy` | `xqc` |
+-| ReBRAC-v2 | `HPRLReBRACv2ETHStrategy` | `rebrac_v2` |
++## 多周期结构
+ 
+-五个 wrapper 只声明 `MODEL_KEY`，真正的公共接线逻辑集中在 `strategies/hprl_base.py`。算法实现仍来自仓库 `freqtrade.hedge.hprl`，没有复制 TD3/SAC/XQC/ReBRAC 实现。
++V3 保留 5 个 native HPRL 算法：
+ 
+-## 3. 统一风险/动作语义
++- Fast-TD3
++- Fast-DSAC
++- SimBa-SAC
++- XQC
++- ReBRAC-v2
+ 
+-五个算法共享同一 tier grid：
++并保留 6 个 base timeframe：
+ 
+-```text
+-margin tiers = 0 / 3% / 7% / 12% / 20%
+-leverage     = 2x
+-max leg margin  = 20%
+-max gross margin = 35%
+-max increase     = 1 tier / decision
+-max decrease     = unlimited de-risking
+-```
++- 1m
++- 5m
++- 15m
++- 1h
++- 8h
++- 1d
+ 
+-对应 HEDGE notional/equity envelope：
++每个 base timeframe 自动消费自身和所有更高 timeframe：
+ 
+ ```text
+-max single leg notional = 40%
+-max gross notional      = 70%
++1m  -> 1m + 5m + 15m + 1h + 8h + 1d
++5m  -> 5m + 15m + 1h + 8h + 1d
++15m -> 15m + 1h + 8h + 1d
++1h  -> 1h + 8h + 1d
++8h  -> 8h + 1d
++1d  -> 1d
+ ```
+ 
+-V2.1 不再用 float32 `target_margin` 作为生产仓位真值；正式 Strategy 读取 native codec 的 `executed_level_index`，映射回配置中的精确 tier 后再计算 notional。
++所以未来仍可执行 5 x 6 = 30 个正式 task，但这些 task 已经不是原来的 isolated single-timeframe policy。
+ 
+-## 4. canonical HEDGE Strategy 输出
++## Freqtrade 接入方式
+ 
+-Strategy 显式生成：
++Strategy 实现 `informative_pairs()`，高周期 OHLCV 由：
+ 
+-```text
+-hedge_long_score
+-hedge_short_score
+-hedge_target_net
+-hedge_target_net_ratio
+-hedge_confidence
+-hedge_risk_scale
+-hedge_long_exposure_scale
+-hedge_short_exposure_scale
+-hedge_allow_new_risk
+-hedge_regime
+-hedge_reason
+-hedge_model_version
++```python
++self.dp.get_pair_dataframe(pair=pair, timeframe=timeframe)
+ ```
+ 
+-`hedge_target_net` 与 `hedge_target_net_ratio` 在当前双腿独立 target 模式下保持 nullable；仓位大小通过 production adapter 产生的双腿 exposure scale 进入 HEDGE planner。
++提供。
+ 
+-## 5. checkpoint / artifact fail-closed
+-
+-每个 `model × timeframe` 产物目录要求同时存在：
++多周期数据不会普通 forward-fill。feature alignment 只接受已经闭合的 informative candle：
+ 
+ ```text
+-checkpoint.pt
+-checkpoint.pt.json
+-scaler.npz
+-metadata.json
+-artifact_manifest.json
++informative_open + informative_duration <= base_candle_close
+ ```
+ 
+-`artifact_manifest.json` 是完整产物集的 commit marker，并记录其他文件 SHA-256。重新训练开始前先删除该 manifest，其他文件全部成功写完后才最后提交新 manifest。
+-
+-V2.1 runtime contract 同时绑定：
++超过一个 source timeframe 没有可用的已闭合 informative candle 会 fail-closed。
+ 
+-- model / algorithm / Strategy class / timeframe；
+-- feature version 与 feature names；
+-- action / cost / reward 配置；
+-- model hyperparameters；
+-- 本套件关键源码 SHA-256；
+-- 仓库 `freqtrade/hedge/hprl/**/*.py` SHA-256；
+-- `freqtrade/hedge/production/hprl_hedge_adapter.py` SHA-256。
++原始 OHLCV 的缺口处理与 Freqtrade 正式历史加载保持一致：由 Freqtrade 使用 no-action candle 补齐，再进入严格连续时间轴和 closed-candle 对齐；训练与正式 Strategy 不再采用两套不同的缺口语义。
+ 
+-所以源码变更不能继续静默复用旧 checkpoint。
++## 文件
+ 
+-## 6. 特征和时间因果约束
++- `suite_specs.py`：模型、risk/action/cost、timeframe hierarchy 和 MTF alignment contract
++- `features.py`：单周期 causal features + closed-candle MTF alignment
++- `artifact_contract.py`：checkpoint/runtime/source fingerprint
++- `prepare_models.py`：native HPRL MTF 模型准备/训练入口
++- `strategies/hprl_mtf_v3_base.py`：真实 Freqtrade IStrategy bridge
++- `strategies/hprl_*_eth.py`：5 个真实 Strategy classes
++- `configs/*.json`：5 个 HEDGE/Freqtrade config
++- `run_suite.py`：未来执行 30 组 formal `hedge-backtesting`
++- `run_all.ps1`：PowerShell 5.1 future full-run entry point
++- `Install-HPRL-Freqtrade-MTF-V3.ps1`：源码安装器，不执行训练或回测
++- `SOURCE_IMPROVEMENTS.md`：本次源码设计与改进明细
+ 
+-特征使用当前及历史已闭合 K 线，不读取未来 K 线。正式 target 先由 `agent.act(obs)` 决定，再由 shadow env `step()` 消耗该 row 对应的 forward return。
++## 安装行为
+ 
+-V2.1 还增加以下 fail-closed 约束：
+-
+-- K 线 timestamp 必须有效、唯一、严格递增；
+-- 相邻 timestamp 必须精确等于当前 timeframe；
+-- feature warmup 结束后禁止再出现 NaN/Inf；
+-- 禁止通过删除中间 row 压缩 market time；
+-- OHLC 必须有限且 > 0，volume 必须有限且 >= 0；
+-- RSI 在无下跌/无波动边界下使用确定性数学定义；
+-- volume rolling std=0 时 z-score=0，而不是 NaN。
+-
+-## 7. startup 与正式 HEDGE replay 对齐
+-
+-这是 V2.1 的关键修复之一。
+-
+-Freqtrade 会把 startup candles 交给 Strategy 计算指标，随后正式 HEDGE backtest 会裁掉 `startup_candle_count` rows，并从空钱包开始 replay。
+-
+-因此 HPRL shadow env 现在也在同一个 `startup_candle_count` 位置 reset：
++安装器只把本套件放入 HEDGE repo root 下：
+ 
+ ```text
+-startup rows: 只用于指标 warmup
+-formal first row:
+-    HEDGE wallet = flat
+-    HPRL shadow  = flat
++<HEDGE>\HPRL_FREQTRADE_MTF_V3
+ ```
+ 
+-避免旧实现中“第一根正式 HEDGE K 线还是空仓，但 agent 已经在 shadow 环境中持仓多根 K 线”的状态错位。
++不会修改 `freqtrade/hedge/hprl` native 实现，不会 `pip install -e`，不会启动训练，不会启动 backtest。
+ 
+-## 8. shadow termination 语义
++如果目标目录已经存在，安装器会先将旧目录压缩备份到用户 `Downloads`，然后再替换。
+ 
+-HPRL native env 的 bankrupt row 会 autoreset。`terminated=True` 不代表整段历史结束。
++## CPU 默认
+ 
+-V2.1 Strategy 不再因为 shadow `terminated=True` 就停止后续 signal 生成；它继续使用 native env 返回的 autoreset observation。shadow 账户只为 policy observation 服务，不能终止 HEDGE 正式 replay。
+-
+-## 9. 30 项正式矩阵（以后执行）
+-
+-源码仍保留标准执行矩阵：
+-
+-```text
+-5 models × 6 timeframes
+-1m / 5m / 15m / 1h / 8h / 1d
+-= 30 formal hedge-backtesting tasks
+-```
++V3 的 `run_all.ps1`、`run_suite.py`、`prepare_models.py` 和 Strategy 推理默认 device 均为 CPU。只有显式指定时才使用其他设备。
+ 
+-`run_suite.py` 中每项独立 subprocess，单项失败记录后继续。`--data-format auto` 时，训练阶段实际识别到的数据格式会写入 metadata，正式 backtest 再显式传入 `--data-format-ohlcv`。
++## 旧 checkpoint
+ 
+-**本轮没有执行上述任务。**
++V2.x checkpoint 不兼容 V3 MTF feature contract。V3 会通过 metadata schema、input timeframe list、feature layout、alignment contract 和 source fingerprint 拒绝旧 artifact。
+ 
+-## 10. 当前明确没有解决的架构边界
+-
+-当前正式 historical lifecycle 仍然是：
+-
+-```text
+-Strategy 对整段 dataframe 生成信号
+-        ↓
+-HEDGE event replay
+-```
+-
+-因此 Strategy 在产生第 t 根信号时，还拿不到 HEDGE matcher 对第 t-1 根实际成交后形成的 authoritative wallet state。HPRL env 只能维护 policy-state shadow。
+-
+-当前版本的权威划分必须保持：
+-
+-```text
+-HPRL shadow:
+-  policy observation / tier transition state
+-
+-HEDGE replay:
+-  fills / orders / fees / funding / wallet / liquidation / PnL
+-```
+-
+-真正闭环的下一阶段应改成：
+-
+-```text
+-HEDGE state(t)
+-    ↓
+-HPRL observation
+-    ↓
+-agent target(t)
+-    ↓
+-HprlHedgeAdapter
+-    ↓
+-HEDGE planner + matcher
+-    ↓
+-HEDGE state(t+1)
+-```
+-
+-这属于后续架构开发，不在本轮“只修源码”的范围内。
+-
+-## 11. 文件说明
+-
+-```text
+-artifact_contract.py        产物/源码语义指纹、原子文件写入、manifest 校验
+-features.py                 严格因果特征与连续时间约束
+-prepare_models.py           native HPRL 模型准备/checkpoint 生成
+-suite_specs.py              五模型统一动作、奖励、训练参数
+-strategies/hprl_base.py     HPRL -> production adapter -> hedge_* 核心 Strategy 接线
+-strategies/hprl_*_eth.py    五个真实 Freqtrade Strategy wrapper
+-configs/*.json              五份标准 HEDGE/Freqtrade futures hedge 配置
+-run_suite.py                后续 30 项正式 backtesting 调度器
+-validate_suite.py           后续源码/配置静态验证器
+-SOURCE_REPAIR_NOTES.md      V2.1 整改明细
+-PACKAGE_MANIFEST.json       当前交付文件清单；不会伪造 runtime PASS
+-```
++## 后续运行
+ 
+-详细修改列表见 `SOURCE_REPAIR_NOTES.md`。
++等源码整改确认后，再进行训练和正式 30 组 HEDGE/Freqtrade backtesting。正式收益证据只认 `hedge-backtesting` 输出，不认 legacy runner 的自定义 evaluator。
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/SOURCE_IMPROVEMENTS.md /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/SOURCE_IMPROVEMENTS.md
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/SOURCE_IMPROVEMENTS.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/SOURCE_IMPROVEMENTS.md	2026-08-20 12:14:07.396328054 +0000
+@@ -0,0 +1,142 @@
++# HPRL Freqtrade Multi-Timeframe V3 - Source Improvements
++
++状态：`SOURCE_REPAIRED_MTF_TESTS_DEFERRED`
++
++本版本只完成源码架构整改。未执行 HPRL 训练、30 组正式 HEDGE/Freqtrade 回测、收益比较或性能验收。
++
++## 1. 核心变化
++
++V2.x 的 5 个算法可以分别在 1m/5m/15m/1h/8h/1d 上运行，但每次 Strategy 只消费当前 timeframe。V3 保留原来的 5 x 6 = 30 组矩阵，同时让每个 base timeframe 消费 Freqtrade informative 高周期：
++
++| Base | Policy input timeframes |
++|---|---|
++| 1m | 1m + 5m + 15m + 1h + 8h + 1d |
++| 5m | 5m + 15m + 1h + 8h + 1d |
++| 15m | 15m + 1h + 8h + 1d |
++| 1h | 1h + 8h + 1d |
++| 8h | 8h + 1d |
++| 1d | 1d |
++
++Strategy 通过 `informative_pairs()` 注册高周期，并通过 Freqtrade `DataProvider.get_pair_dataframe()` 获取 OHLCV。旧 `HPRL_ETH_MULTI_TF/runner.py` 仍不参与正式收益计算。
++
++## 2. 严格 closed-candle 对齐
++
++Freqtrade OHLCV 的 `date` 表示 candle open time。V3 的每一个 base decision 使用 base candle close 作为决策时间：
++
++`decision_time = base_open + base_duration`
++
++informative candle 只有满足：
++
++`informative_open + informative_duration <= decision_time`
++
++才可以进入 observation。
++
++实现使用 NumPy `searchsorted(..., side="right") - 1` 查找最后一根已经闭合的 source candle。没有使用对未来数据不透明的普通 `resample + ffill`。
++
++如果最后一根 informative candle 相对当前 decision 已经老化达到一个完整 source timeframe，则该 source 被判定 stale 并 fail-closed。不会无限 forward-fill 历史高周期数据。
++
++原始 OHLCV 缺口现在与 Freqtrade 正式 backtesting/DataProvider 保持同一语义：使用 Freqtrade no-action candle 补齐后再进行严格时间轴检查。这样训练阶段与正式 Strategy 不会因 `fill_up_missing` 设置不同而产生隐蔽的数据分布差异。
++
++## 3. MTF feature layout
++
++每个 timeframe 仍使用同一套 causal OHLCV features，并带 timeframe prefix，例如：
++
++- `1m__logret_1`
++- `5m__rsi14`
++- `1h__atr14_pct`
++- `1d__ema_spread_55`
++
++每个 informative timeframe 额外加入：
++
++- `<tf>__age_frac`
++
++`age_frac` 表示从最后一根已闭合 informative candle 的 close 到当前 base decision 的时间，占 source timeframe 的比例，范围严格为 `[0, 1)`。
++
++这让 agent 知道高周期信息距离下一次更新还有多远，同时不泄漏未收盘 candle。
++
++## 4. 内存策略
++
++没有把 6 个宽 DataFrame 直接 `merge` 成百万行级 pandas 表。
++
++`align_multi_timeframe_features()`：
++
++1. 逐 timeframe 计算 feature frame；
++2. 通过 integer timestamp/searchsorted 生成 source row index；
++3. 直接写入一个最终 `float32` NumPy observation matrix；
++4. 当前 timeframe block 写完后释放 feature DataFrame 引用。
++
++因此 1m 两年历史的主要新增内存为最终 float32 MTF feature matrix，而不是多份 float64 pandas merge 副本。
++
++## 5. startup / informative warmup
++
++`startup_candle_count` 提升到 96。
++
++这不仅覆盖 base timeframe 的 EMA55 / rolling24 等 warmup，也会被 Freqtrade DataProvider 用于 informative historical loading，使 1d 等高周期在正式 backtest 起点之前拥有足够的历史。
++
++正式 HEDGE replay 仍从 Freqtrade trim 掉 startup rows 后开始。HPRL shadow env 在同一个 base row 边界 reset 为 flat，避免 startup candle 改变正式起始账户状态。
++
++## 6. Training / Strategy feature parity
++
++训练和 Strategy 推理共用：
++
++- `build_feature_frame()`
++- `align_multi_timeframe_features()`
++- 同一 `input_timeframes_for(base)`
++- 同一 closed-candle visibility rule
++- 同一 feature names/order
++
++训练阶段会读取 base timeframe 及其全部 informative timeframes。每个 source 在 train start 前额外保留 96 根自身 timeframe 的 warmup candle，再在 base decision timeline 上对齐。
++
++## 7. Checkpoint / stale-artifact 防护
++
++模型 metadata 升级到 `hprl-freqtrade-model-v5-mtf`。
++
++runtime contract 现在绑定：
++
++- model / algorithm / Strategy class
++- base timeframe
++- input timeframes
++- feature version
++- exact feature names/order
++- MTF alignment contract
++- action/cost/reward/model spec
++- suite semantic source hashes
++- repository HPRL implementation hashes
++- DataProvider / Strategy interface / history loader / backtesting / HEDGE Strategy contract / HPRL adapter hashes
++
++旧 V2.x checkpoint 不允许静默加载。需要重新训练后才会生成新的 MTF artifact manifest。
++
++## 8. 30 组矩阵没有删除
++
++V3 仍保留：
++
++`5 algorithms x 6 base timeframes = 30 formal tasks`
++
++差别是低周期 task 不再是孤立单周期模型，而是具有高周期 informative context 的真实 MTF model。
++
++## 9. 正式执行权仍属于 HEDGE
++
++HPRL Strategy 只产生 canonical：
++
++- `hedge_long_score`
++- `hedge_short_score`
++- `hedge_long_exposure_scale`
++- `hedge_short_exposure_scale`
++- `hedge_confidence`
++- `hedge_risk_scale`
++- `hedge_allow_new_risk`
++- nullable target fields / regime / reason / model version
++
++HPRL shadow env 不拥有正式成交、手续费、funding、钱包余额、强平或最终 PnL。
++
++正式结果仍只能来自：
++
++`python -m freqtrade hedge-backtesting`
++
++## 10. 仍然存在的架构边界
++
++当前 Freqtrade historical lifecycle 仍然是 Strategy 先分析 dataframe，随后 HEDGE replay 执行。因此 HPRL env 中的 position/equity state 仍是 policy-state shadow，不是 HEDGE replay 的 authoritative state。
++
++V3 修复的是多时间周期数据输入、closed-candle causal alignment、训练/推理一致性和 artifact provenance；它没有假装已经完成逐 bar 的 HEDGE-state -> HPRL -> planner -> fill -> next-HPRL-state 闭环。
++
++真正的下一阶段闭环需要修改 HEDGE replay orchestration，使 policy evaluation 进入 replay loop 本身。
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/SOURCE_REPAIR_NOTES.md /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/SOURCE_REPAIR_NOTES.md
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/SOURCE_REPAIR_NOTES.md	2026-08-20 11:51:48.351610311 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/SOURCE_REPAIR_NOTES.md	1970-01-01 00:00:00.000000000 +0000
+@@ -1,55 +0,0 @@
+-# HPRL/Freqtrade V2.1 源码整改说明
+-
+-本次交付只处理源码，不执行模型训练、30 组 backtesting、收益验证或性能测试。
+-
+-## 已整改的源码问题
+-
+-1. **HPRL tier 浮点边界漂移**  
+-   正式 Strategy 不再从 `float32 target_margin` 反推生产仓位，而是读取 native codec 的 `executed_level_index`，映射回配置中的精确 tier，再计算 notional。避免合法的单级仓位跳转因浮点尾差被 production adapter 误判。
+-
+-2. **旧 checkpoint 被错误复用**  
+-   模型产物升级为 metadata v4 + artifact manifest v2。复用前同时验证 runtime contract、训练数据指纹、训练预算、关键源码指纹和每个产物文件 SHA-256。
+-
+-3. **底层 HPRL 源码变化未触发失效**  
+-   runtime contract 会哈希本套件的特征/训练/Strategy 关键源码，以及仓库 `freqtrade/hedge/hprl/**/*.py` 与 `freqtrade/hedge/production/hprl_hedge_adapter.py`。底层实现改变后旧 checkpoint fail-closed。
+-
+-4. **checkpoint 产物集非原子提交**  
+-   `artifact_manifest.json` 作为产物集 commit marker。重新训练前先删除 manifest，checkpoint/scaler/metadata 全部写完并计算哈希后最后写 manifest。中断训练不会留下可被误识别为完整的新旧混合产物。
+-
+-5. **probe 环境与训练 dataset 生命周期耦合**  
+-   observation/action dimension probe 使用独立 dataset，probe 关闭后重新构造训练 dataset，不再依赖 HPRL environment/MarketDatasetAccessor 的内部释放行为。
+-
+-6. **shadow env termination 错误终止整段 Strategy**  
+-   native HPRL env 对破产行具有 autoreset 语义。Strategy 不再因 `terminated=True` 停止后续历史信号生成，而是继续使用 autoreset 后 observation。shadow 账户不会再错误地主宰正式 HEDGE 回测生命周期。
+-
+-7. **Freqtrade startup 与 HPRL shadow 账户起点错位**  
+-   Freqtrade 会先分析 startup candles，再在 HEDGE replay 前裁掉这些 rows，并从空账户开始正式 replay。Strategy 现在在同一个 `startup_candle_count` 位置 reset HPRL shadow env，使第一根正式 HEDGE bar 与 policy state 都从 flat account 起点开始。
+-
+-8. **特征流被静默压缩**  
+-   特征 warmup 完成后，只要任意后续 row 出现非有限特征就直接失败，不再通过丢 row 的方式压缩时间。K 线时间戳必须唯一、严格递增并与 timeframe 精确连续。
+-
+-9. **RSI / 成交量 z-score 数学退化产生伪 NaN**  
+-   RSI 改为基于 `gain/(gain+loss)` 的稳定形式，无波动时定义为中性 50；成交量滚动标准差为 0 时 z-score 定义为 0。合法的单边行情或恒定成交量不会被误报为坏数据。
+-
+-10. **正式 HEDGE signal surface 不完整**  
+-    Strategy 批量写出完整 canonical `hedge_*` surface，包括两个 nullable target 字段、confidence、risk scale、双腿 exposure scale、new-risk gate、regime/reason/model-version。避免依赖隐式列缺省。
+-
+-11. **1m 长历史逐 row DataFrame 写入开销**  
+-    正式 Strategy 改为 NumPy 预分配并一次性批量写入列，避免百万级 `DataFrame.at` 写操作。
+-
+-12. **训练数据格式与正式回测格式可能不一致**  
+-    `auto` 数据格式会把实际解析到的格式写入模型 metadata；正式 orchestrator 读取该值并显式传递 `--data-format-ohlcv`，不再默认回落到 feather。
+-
+-## 仍然明确保留的架构边界
+-
+-当前 HEDGE/Freqtrade historical lifecycle 仍是：
+-
+-`Strategy 整段分析 -> hedge_* 信号 -> HEDGE event replay`
+-
+-因此 native HPRL env 在 Strategy 内只能维护 **policy-state shadow**。最终成交、手续费、funding、钱包和 PnL 仍必须以 HEDGE replay 为唯一权威；V2.1 不把 shadow 结果宣传成正式账户结果。
+-
+-真正的下一阶段 closed-loop 应把 HPRL inference 嵌入 HEDGE replay 的逐 bar 决策边界：
+-
+-`HEDGE state(t) -> HPRL observation -> target(t) -> adapter -> planner/matcher -> HEDGE state(t+1)`
+-
+-本次没有实现这一架构扩展，因为用户要求当前阶段先修源码、测试和后续闭环开发以后再做。
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/artifact_contract.py /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/artifact_contract.py
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/artifact_contract.py	2026-08-20 11:45:42.437832919 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/artifact_contract.py	2026-08-20 12:09:09.921970977 +0000
+@@ -10,10 +10,10 @@
+ import numpy as np
+ 
+ 
+-MODEL_METADATA_SCHEMA = "hprl-freqtrade-model-v4"
+-ARTIFACT_MANIFEST_SCHEMA = "hprl-freqtrade-artifact-manifest-v2"
+-RUNTIME_CONTRACT_SCHEMA = "hprl-freqtrade-runtime-contract-v2"
+-SOURCE_CONTRACT_SCHEMA = "hprl-freqtrade-source-contract-v1"
++MODEL_METADATA_SCHEMA = "hprl-freqtrade-model-v5-mtf"
++ARTIFACT_MANIFEST_SCHEMA = "hprl-freqtrade-artifact-manifest-v3-mtf"
++RUNTIME_CONTRACT_SCHEMA = "hprl-freqtrade-runtime-contract-v3-mtf"
++SOURCE_CONTRACT_SCHEMA = "hprl-freqtrade-source-contract-v2-mtf"
+ REQUIRED_ARTIFACT_FILES = ("checkpoint.pt", "checkpoint.pt.json", "scaler.npz", "metadata.json")
+ 
+ _SEMANTIC_SUITE_FILES = (
+@@ -21,7 +21,7 @@
+     "features.py",
+     "prepare_models.py",
+     "suite_specs.py",
+-    "strategies/hprl_base.py",
++    "strategies/hprl_mtf_v3_base.py",
+     "strategies/hprl_fast_td3_eth.py",
+     "strategies/hprl_fast_dsac_eth.py",
+     "strategies/hprl_simba_sac_eth.py",
+@@ -29,6 +29,16 @@
+     "strategies/hprl_rebrac_v2_eth.py",
+ )
+ 
++# These repository surfaces define the data/Strategy/HEDGE lifecycle consumed by this suite.
++_REPOSITORY_INTEGRATION_FILES = (
++    "freqtrade/data/dataprovider.py",
++    "freqtrade/strategy/interface.py",
++    "freqtrade/resolvers/strategy_resolver.py",
++    "freqtrade/data/history/history_utils.py",
++    "freqtrade/hedge/strategies/contract.py",
++    "freqtrade/hedge/production/hprl_hedge_adapter.py",
++)
++
+ 
+ def _jsonable(value):
+     if is_dataclass(value):
+@@ -84,15 +94,8 @@
+     return digest.hexdigest()
+ 
+ 
+-
+-
+ def source_contract_payload(*, suite_root: str | Path, repo_root: str | Path) -> dict[str, object]:
+-    """Hash the source surfaces that define training and Strategy inference semantics.
+-
+-    A checkpoint is reusable only when these exact source files are unchanged.  This is
+-    intentionally conservative: a HPRL implementation change must require an explicit
+-    retrain instead of relying on Python class names or compatible tensor shapes alone.
+-    """
++    """Hash all source surfaces that define MTF training and Strategy inference semantics."""
+     suite = Path(suite_root).resolve()
+     repo = Path(repo_root).resolve()
+     suite_files: dict[str, str] = {}
+@@ -109,10 +112,11 @@
+     for path in sorted(hprl_root.rglob("*.py")):
+         relative = path.relative_to(repo).as_posix()
+         repository_files[relative] = sha256_file(path)
+-    adapter = repo / "freqtrade" / "hedge" / "production" / "hprl_hedge_adapter.py"
+-    if not adapter.is_file():
+-        raise FileNotFoundError(f"HPRL production adapter source is missing: {adapter}")
+-    repository_files[adapter.relative_to(repo).as_posix()] = sha256_file(adapter)
++    for relative in _REPOSITORY_INTEGRATION_FILES:
++        path = repo / relative
++        if not path.is_file():
++            raise FileNotFoundError(f"HPRL integration source is missing: {path}")
++        repository_files[relative] = sha256_file(path)
+     if not repository_files:
+         raise RuntimeError("HPRL semantic repository source set is empty")
+ 
+@@ -128,9 +132,11 @@
+     model_key: str,
+     algorithm: str,
+     strategy_class: str,
+-    timeframe: str,
++    base_timeframe: str,
++    input_timeframes: tuple[str, ...],
+     feature_version: str,
+     feature_names: tuple[str, ...],
++    alignment_contract: Mapping[str, object],
+     action_config: Mapping[str, object],
+     cost_config: Mapping[str, object],
+     reward_config: Mapping[str, object],
+@@ -139,14 +145,19 @@
+ ) -> dict[str, object]:
+     if source_contract.get("schema") != SOURCE_CONTRACT_SCHEMA:
+         raise ValueError("invalid HPRL source contract schema")
++    if not input_timeframes or input_timeframes[0] != base_timeframe:
++        raise ValueError("runtime contract input_timeframes must start with base_timeframe")
+     return {
+         "schema": RUNTIME_CONTRACT_SCHEMA,
+         "model": model_key,
+         "algorithm": algorithm,
+         "strategy_class": strategy_class,
+-        "timeframe": timeframe,
++        "timeframe": base_timeframe,
++        "base_timeframe": base_timeframe,
++        "input_timeframes": list(input_timeframes),
+         "feature_version": feature_version,
+         "feature_names": list(feature_names),
++        "alignment_contract": _jsonable(alignment_contract),
+         "action_config": _jsonable(action_config),
+         "cost_config": _jsonable(cost_config),
+         "reward_config": _jsonable(reward_config),
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/features.py /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/features.py
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/features.py	2026-08-20 11:39:14.288620554 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/features.py	2026-08-20 12:14:48.604116114 +0000
+@@ -1,10 +1,14 @@
+ from __future__ import annotations
+ 
++from collections.abc import Mapping, Sequence
++
+ import numpy as np
+ import pandas as pd
+ 
++from suite_specs import TIMEFRAME_SECONDS
++
+ 
+-FEATURE_VERSION = "hprl-freqtrade-ohlcv-v2"
++FEATURE_VERSION = "hprl-freqtrade-mtf-closed-candle-v3"
+ 
+ 
+ def _dates(dataframe: pd.DataFrame, *, expected_seconds: int | None) -> pd.Series:
+@@ -90,10 +94,12 @@
+     gain = delta.clip(lower=0).ewm(alpha=1 / 14, adjust=False, min_periods=14).mean()
+     loss = (-delta.clip(upper=0)).ewm(alpha=1 / 14, adjust=False, min_periods=14).mean()
+     movement = gain + loss
+-    rsi = 100.0 * gain / movement.where(movement > 0, 1.0)
+-    # No movement is neutral RSI=50.  A one-sided trend naturally maps to 100/0
+-    # without creating NaN from division by zero.
+-    rsi = rsi.where(movement > 0, 50.0)
++    denominator = movement.where(movement > 0, 1.0)
++    rsi = 100.0 * gain / denominator
++    # Zero movement after the RSI warmup is neutral.  Pre-warmup NaN remains NaN and is not
++    # silently converted into a valid feature.  One-sided gain/loss still maps to 100/0.
++    no_movement = movement.notna() & (movement <= 0)
++    rsi = rsi.where(~no_movement, 50.0)
+     feats["rsi14"] = rsi / 50.0 - 1.0
+ 
+     prev_close = close.shift(1)
+@@ -123,23 +129,6 @@
+     return pd.DataFrame(feats, index=dataframe.index).replace([np.inf, -np.inf], np.nan)
+ 
+ 
+-def _feature_window(features: pd.DataFrame) -> tuple[np.ndarray, int]:
+-    values = features.to_numpy(dtype=np.float64, copy=False)
+-    valid = np.isfinite(values).all(axis=1)
+-    positions = np.flatnonzero(valid)
+-    if not len(positions):
+-        raise ValueError("HPRL features never become fully valid after startup warmup")
+-    first = int(positions[0])
+-    invalid_after_start = np.flatnonzero(~valid[first:])
+-    if len(invalid_after_start):
+-        bad = first + int(invalid_after_start[0])
+-        raise ValueError(
+-            "HPRL feature stream became invalid after startup warmup at dataframe position "
+-            f"{bad}; refusing to compress or skip a market timestep"
+-        )
+-    return valid, first
+-
+-
+ def _available_notional(volume: pd.Series, close: pd.Series) -> pd.Series:
+     available = volume * close
+     if not np.isfinite(available.to_numpy(copy=False)).all():
+@@ -147,63 +136,281 @@
+     return available.clip(lower=1.0)
+ 
+ 
+-def training_arrays(dataframe: pd.DataFrame, *, expected_seconds: int | None = None):
+-    dates = _dates(dataframe, expected_seconds=expected_seconds)
+-    open_, high, low, close, volume = _numeric_ohlcv(dataframe)
+-    del open_, high, low
+-    features = build_feature_frame(dataframe)
+-    _, first = _feature_window(features)
+-    if len(dataframe) - first < 2:
+-        raise ValueError("HPRL training window has fewer than two usable timesteps")
+-
+-    forward_return = close.shift(-1) / close - 1.0
+-    positions = np.arange(first, len(dataframe) - 1, dtype=np.int64)
+-    returns = forward_return.iloc[positions].to_numpy(dtype=np.float64, copy=False)
+-    if not np.isfinite(returns).all():
+-        bad = int(positions[np.flatnonzero(~np.isfinite(returns))[0]])
++def _normalize_utc(value: object) -> pd.Timestamp:
++    result = pd.Timestamp(value)
++    if result.tzinfo is None:
++        return result.tz_localize("UTC")
++    return result.tz_convert("UTC")
++
++
++def _validate_timeframes(
++    frames: Mapping[str, pd.DataFrame],
++    base_timeframe: str,
++    input_timeframes: Sequence[str],
++) -> tuple[str, ...]:
++    values = tuple(str(value) for value in input_timeframes)
++    if not values or values[0] != base_timeframe:
++        raise ValueError("HPRL MTF input_timeframes must start with the base timeframe")
++    if len(set(values)) != len(values):
++        raise ValueError("HPRL MTF input_timeframes must be unique")
++    unsupported = [tf for tf in values if tf not in TIMEFRAME_SECONDS]
++    if unsupported:
++        raise ValueError("unsupported HPRL MTF timeframe(s): " + ", ".join(unsupported))
++    missing = [tf for tf in values if tf not in frames]
++    if missing:
++        raise ValueError("HPRL MTF input is missing timeframe(s): " + ", ".join(missing))
++    base_seconds = TIMEFRAME_SECONDS[base_timeframe]
++    smaller = [tf for tf in values[1:] if TIMEFRAME_SECONDS[tf] < base_seconds]
++    if smaller:
+         raise ValueError(
+-            f"HPRL training forward return is invalid at dataframe position {bad}"
++            "informative timeframes must be equal to or higher than the base timeframe: "
++            + ", ".join(smaller)
+         )
+-    available = _available_notional(volume, close).iloc[positions]
+-    x = features.iloc[positions].to_numpy(dtype=np.float32, copy=True)
+-    y = returns.astype(np.float32, copy=True)
+-    a = available.to_numpy(dtype=np.float32, copy=True)
+-    timestamps = dates.iloc[positions].to_numpy(copy=True)
+-    return x, y, a, timestamps, tuple(features.columns), positions
++    return values
++
+ 
++def _feature_names_for(timeframes: Sequence[str], single_names: Sequence[str]) -> tuple[str, ...]:
++    names: list[str] = []
++    base = str(timeframes[0])
++    for timeframe in timeframes:
++        names.extend(f"{timeframe}__{name}" for name in single_names)
++        if timeframe != base:
++            names.append(f"{timeframe}__age_frac")
++    return tuple(names)
++
++
++def align_multi_timeframe_features(
++    frames: Mapping[str, pd.DataFrame],
++    *,
++    base_timeframe: str,
++    input_timeframes: Sequence[str],
++    base_positions: np.ndarray | None = None,
++) -> tuple[np.ndarray, tuple[str, ...], dict[str, object]]:
++    """Align informative features to base-candle close without lookahead.
++
++    Freqtrade OHLCV timestamps identify candle *open* time.  A source candle therefore becomes
++    visible only at ``source_open + source_duration``.  For every base decision we choose the
++    latest source candle whose close is <= the base candle close.  No partial higher-timeframe
++    candle can enter the observation.
+ 
+-def inference_arrays(dataframe: pd.DataFrame, *, expected_seconds: int | None = None):
+-    """Build a non-compressing causal inference tape for the formal Strategy.
+-
+-    The final forward return is set to zero solely because the native dataset requires
+-    aligned tensor lengths.  The Strategy emits the final target before that placeholder
+-    could ever be consumed by ``env.step``.
++    This function writes directly into one float32 matrix instead of merging six wide pandas
++    dataframes, which substantially reduces peak memory on multi-year 1m histories.
+     """
+-    dates = _dates(dataframe, expected_seconds=expected_seconds)
+-    open_, high, low, close, volume = _numeric_ohlcv(dataframe)
+-    del open_, high, low
+-    features = build_feature_frame(dataframe)
+-    _, first = _feature_window(features)
+-    positions = np.arange(first, len(dataframe), dtype=np.int64)
+-    if len(positions) < 2:
+-        raise ValueError("Not enough causal HPRL feature rows in Freqtrade dataframe")
++    timeframes = _validate_timeframes(frames, base_timeframe, input_timeframes)
++    base_frame = frames[base_timeframe]
++    base_dates = _dates(base_frame, expected_seconds=TIMEFRAME_SECONDS[base_timeframe])
++    base_ns = base_dates.astype("int64").to_numpy(copy=False)
++
++    if base_positions is None:
++        positions = np.arange(len(base_frame), dtype=np.int64)
++    else:
++        positions = np.asarray(base_positions, dtype=np.int64)
++        if positions.ndim != 1:
++            raise ValueError("base_positions must be one-dimensional")
++        if len(positions) and (positions[0] < 0 or positions[-1] >= len(base_frame)):
++            raise ValueError("base_positions contains an out-of-range row")
++        if len(positions) > 1 and np.any(np.diff(positions) <= 0):
++            raise ValueError("base_positions must be strictly increasing")
++
++    base_seconds = TIMEFRAME_SECONDS[base_timeframe]
++    decision_close_ns = base_ns[positions] + base_seconds * 1_000_000_000
++
++    first_feature_frame = build_feature_frame(base_frame)
++    single_names = tuple(str(name) for name in first_feature_frame.columns)
++    feature_names = _feature_names_for(timeframes, single_names)
++    output = np.full((len(positions), len(feature_names)), np.nan, dtype=np.float32)
++
++    source_summary: dict[str, object] = {}
++    column = 0
++    for timeframe in timeframes:
++        frame = frames[timeframe]
++        dates = _dates(frame, expected_seconds=TIMEFRAME_SECONDS[timeframe])
++        if timeframe == base_timeframe:
++            feature_frame = first_feature_frame
++        else:
++            feature_frame = build_feature_frame(frame)
++        if tuple(feature_frame.columns) != single_names:
++            raise RuntimeError(f"HPRL feature layout changed across timeframe {timeframe}")
++
++        source_values = feature_frame.to_numpy(dtype=np.float32, copy=False)
++        source_open_ns = dates.astype("int64").to_numpy(copy=False)
++        source_seconds = TIMEFRAME_SECONDS[timeframe]
++        source_close_ns = source_open_ns + source_seconds * 1_000_000_000
++        source_index = np.searchsorted(source_close_ns, decision_close_ns, side="right") - 1
++        valid_index = source_index >= 0
++
++        age_seconds = np.full(len(positions), np.nan, dtype=np.float64)
++        if np.any(valid_index):
++            selected = source_index[valid_index]
++            selected_close = source_close_ns[selected]
++            selected_age = (decision_close_ns[valid_index] - selected_close) / 1_000_000_000.0
++            age_seconds[valid_index] = selected_age
++            fresh = (selected_age >= 0.0) & (selected_age < float(source_seconds))
++            target_rows = np.flatnonzero(valid_index)[fresh]
++            source_rows = selected[fresh]
++            output[target_rows, column : column + len(single_names)] = source_values[source_rows]
++
++        source_summary[timeframe] = {
++            "rows": int(len(frame)),
++            "first_open": None if len(dates) == 0 else dates.iloc[0].isoformat(),
++            "last_open": None if len(dates) == 0 else dates.iloc[-1].isoformat(),
++            "max_allowed_age_seconds": int(source_seconds - 1),
++        }
++        column += len(single_names)
++
++        if timeframe != base_timeframe:
++            age_frac = age_seconds / float(source_seconds)
++            fresh_age = np.isfinite(age_frac) & (age_frac >= 0.0) & (age_frac < 1.0)
++            output[fresh_age, column] = age_frac[fresh_age].astype(np.float32)
++            column += 1
++
++        # Avoid retaining one full float64 feature dataframe per timeframe.
++        if timeframe != base_timeframe:
++            del feature_frame
++
++    if column != output.shape[1]:
++        raise RuntimeError("HPRL MTF feature column accounting mismatch")
++    del first_feature_frame
++
++    diagnostics = {
++        "base_timeframe": base_timeframe,
++        "input_timeframes": list(timeframes),
++        "decision_rows": int(len(positions)),
++        "feature_count": int(output.shape[1]),
++        "source_summary": source_summary,
++    }
++    return output, feature_names, diagnostics
++
++
++def _first_fully_valid_row(values: np.ndarray) -> int:
++    if values.ndim != 2 or not len(values):
++        raise ValueError("HPRL MTF feature matrix is empty")
++    valid = np.isfinite(values).all(axis=1)
++    positions = np.flatnonzero(valid)
++    if not len(positions):
++        raise ValueError("HPRL MTF features never become fully valid after startup warmup")
++    first = int(positions[0])
++    invalid_after = np.flatnonzero(~valid[first:])
++    if len(invalid_after):
++        bad = first + int(invalid_after[0])
++        bad_columns = np.flatnonzero(~np.isfinite(values[bad]))[:8]
++        raise ValueError(
++            "HPRL MTF feature stream became invalid after startup warmup at aligned row "
++            f"{bad}; bad_column_indices={bad_columns.tolist()}; refusing to compress, forward-fill "
++            "stale informative data, or skip a market timestep"
++        )
++    return first
++
++
++def training_arrays_mtf(
++    frames: Mapping[str, pd.DataFrame],
++    *,
++    base_timeframe: str,
++    input_timeframes: Sequence[str],
++    start: object,
++    end: object,
++):
++    timeframes = _validate_timeframes(frames, base_timeframe, input_timeframes)
++    base = frames[base_timeframe]
++    dates = _dates(base, expected_seconds=TIMEFRAME_SECONDS[base_timeframe])
++    _, _, _, close, volume = _numeric_ohlcv(base)
++    start_ts = _normalize_utc(start)
++    end_ts = _normalize_utc(end)
++    if not start_ts < end_ts:
++        raise ValueError("HPRL training start must be earlier than training end")
++
++    eligible = np.flatnonzero(
++        ((dates >= start_ts) & (dates < end_ts)).to_numpy(dtype=bool, copy=False)
++    ).astype(np.int64, copy=False)
++    if len(eligible) < 2:
++        raise ValueError("HPRL MTF training interval has fewer than two base candles")
++    if np.any(np.diff(eligible) != 1):
++        raise ValueError("HPRL MTF training base interval is not contiguous")
++
++    decision_positions = eligible[:-1]
++    x, feature_names, diagnostics = align_multi_timeframe_features(
++        frames,
++        base_timeframe=base_timeframe,
++        input_timeframes=timeframes,
++        base_positions=decision_positions,
++    )
++    if not np.isfinite(x).all():
++        bad_row = int(np.flatnonzero(~np.isfinite(x).all(axis=1))[0])
++        bad_columns = np.flatnonzero(~np.isfinite(x[bad_row]))[:8]
++        raise ValueError(
++            "HPRL MTF training interval lacks fully closed/fresh informative features at base "
++            f"position={int(decision_positions[bad_row])}; "
++            f"bad_column_indices={bad_columns.tolist()}. "
++            "Provide additional pre-start history for every informative timeframe."
++        )
++
++    next_positions = decision_positions + 1
++    current_close = close.iloc[decision_positions].to_numpy(dtype=np.float64, copy=False)
++    next_close = close.iloc[next_positions].to_numpy(dtype=np.float64, copy=False)
++    returns = next_close / current_close - 1.0
++    if not np.isfinite(returns).all():
++        raise ValueError("HPRL MTF training forward return contains a non-finite value")
++    available = _available_notional(volume, close).iloc[decision_positions]
++    timestamps = dates.iloc[decision_positions].to_numpy(copy=True)
++    diagnostics["interval_start"] = start_ts.isoformat()
++    diagnostics["interval_end"] = end_ts.isoformat()
++    return (
++        x,
++        returns.astype(np.float32, copy=True),
++        available.to_numpy(dtype=np.float32, copy=True),
++        timestamps,
++        feature_names,
++        decision_positions,
++        diagnostics,
++    )
++
++
++def inference_arrays_mtf(
++    frames: Mapping[str, pd.DataFrame],
++    *,
++    base_timeframe: str,
++    input_timeframes: Sequence[str],
++):
++    """Build a causal non-compressing MTF inference tape for a formal Freqtrade Strategy."""
++    timeframes = _validate_timeframes(frames, base_timeframe, input_timeframes)
++    base = frames[base_timeframe]
++    dates = _dates(base, expected_seconds=TIMEFRAME_SECONDS[base_timeframe])
++    _, _, _, close, volume = _numeric_ohlcv(base)
++    positions = np.arange(len(base), dtype=np.int64)
++    x_full, feature_names, diagnostics = align_multi_timeframe_features(
++        frames,
++        base_timeframe=base_timeframe,
++        input_timeframes=timeframes,
++        base_positions=positions,
++    )
++    first = _first_fully_valid_row(x_full)
++    valid_positions = positions[first:]
++    x = x_full[first:]
++    if len(x) < 2:
++        raise ValueError("Not enough causal HPRL MTF rows after startup warmup")
+ 
+     forward_return = close.shift(-1) / close - 1.0
+-    returns = forward_return.iloc[positions].to_numpy(dtype=np.float64, copy=True)
++    returns = forward_return.iloc[valid_positions].to_numpy(dtype=np.float64, copy=True)
+     if len(returns) > 1 and not np.isfinite(returns[:-1]).all():
+         bad_local = int(np.flatnonzero(~np.isfinite(returns[:-1]))[0])
+-        bad = int(positions[bad_local])
++        bad = int(valid_positions[bad_local])
+         raise ValueError(
+-            f"HPRL inference forward return is invalid before the terminal row at position {bad}"
++            "HPRL MTF inference forward return is invalid before the terminal row at "
++            f"position {bad}"
+         )
+     returns[-1] = 0.0
+-
+-    available = _available_notional(volume, close).iloc[positions]
+-    x = features.iloc[positions].to_numpy(dtype=np.float32, copy=True)
+-    y = returns.astype(np.float32, copy=False)
+-    a = available.to_numpy(dtype=np.float32, copy=True)
+-    timestamps = dates.iloc[positions].to_numpy(copy=True)
+-    return x, y, a, timestamps, tuple(features.columns), positions
++    available = _available_notional(volume, close).iloc[valid_positions]
++    timestamps = dates.iloc[valid_positions].to_numpy(copy=True)
++    diagnostics["first_valid_base_position"] = int(valid_positions[0])
++    return (
++        x.astype(np.float32, copy=False),
++        returns.astype(np.float32, copy=False),
++        available.to_numpy(dtype=np.float32, copy=True),
++        timestamps,
++        feature_names,
++        valid_positions,
++        diagnostics,
++    )
+ 
+ 
+ def fit_scaler(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+@@ -222,11 +429,9 @@
+         raise ValueError("feature/scaler arrays have invalid dimensions")
+     if x.shape[-1] != mean.shape[0] or mean.shape != std.shape:
+         raise ValueError("feature/scaler dimensions do not match")
+-    if not np.isfinite(x).all() or not np.isfinite(mean).all() or not np.isfinite(std).all():
+-        raise ValueError("feature/scaler arrays must be finite")
+-    if np.any(std <= 0):
+-        raise ValueError("feature scaler standard deviations must be positive")
+-    scaled = np.clip((x - mean) / std, -8.0, 8.0)
+-    if not np.isfinite(scaled).all():
++    if not np.isfinite(mean).all() or not np.isfinite(std).all() or np.any(std <= 0):
++        raise ValueError("HPRL scaler contains invalid parameters")
++    result = (x.astype(np.float32, copy=False) - mean) / std
++    if not np.isfinite(result).all():
+         raise ValueError("scaled HPRL feature matrix contains a non-finite value")
+-    return scaled.astype(np.float32, copy=False)
++    return result.astype(np.float32, copy=False)
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/prepare_models.py /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/prepare_models.py
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/prepare_models.py	2026-08-20 11:43:05.567033943 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/prepare_models.py	2026-08-20 12:14:48.604712647 +0000
+@@ -13,8 +13,10 @@
+ import pandas as pd
+ 
+ HERE = Path(__file__).resolve().parent
+-if str(HERE) not in sys.path:
+-    sys.path.insert(0, str(HERE))
++_here_text = str(HERE)
++if _here_text in sys.path:
++    sys.path.remove(_here_text)
++sys.path.insert(0, _here_text)
+ 
+ from artifact_contract import (
+     ARTIFACT_MANIFEST_SCHEMA,
+@@ -28,14 +30,18 @@
+     source_contract_payload,
+     verify_manifest_files,
+ )
+-from features import FEATURE_VERSION, apply_scaler, fit_scaler, training_arrays
++from features import FEATURE_VERSION, apply_scaler, fit_scaler, training_arrays_mtf
+ from suite_specs import (
+     ACTION_KWARGS,
+     COST_KWARGS,
+     MODELS,
++    MTF_ALIGNMENT_CONTRACT,
+     PERIODS_PER_YEAR,
++    SOURCE_WARMUP_CANDLES,
++    TIMEFRAME_SECONDS,
+     TRAIN_STEPS,
+     WINDOW_STEPS,
++    input_timeframes_for,
+     reward_kwargs,
+ )
+ 
+@@ -58,7 +64,7 @@
+                 pair="ETH/USDT:USDT",
+                 timeframe=timeframe,
+                 datadir=datadir,
+-                fill_up_missing=False,
++                fill_up_missing=True,
+                 drop_incomplete=False,
+                 startup_candles=0,
+                 data_format=fmt,
+@@ -74,7 +80,8 @@
+     )
+ 
+ 
+-def _training_frame(frame, start: str, end: str):
++def _source_frame(frame, timeframe: str, start: str, end: str):
++    """Keep only the requested interval plus causal pre-start feature warmup."""
+     start_ts = pd.Timestamp(start)
+     end_ts = pd.Timestamp(end)
+     if start_ts.tzinfo is None:
+@@ -85,10 +92,18 @@
+         end_ts = end_ts.tz_localize("UTC")
+     else:
+         end_ts = end_ts.tz_convert("UTC")
++    if not start_ts < end_ts:
++        raise ValueError("training start must be earlier than training end")
++    warmup = pd.Timedelta(seconds=TIMEFRAME_SECONDS[timeframe] * SOURCE_WARMUP_CANDLES)
++    source_start = start_ts - warmup
+     dates = pd.to_datetime(frame["date"], utc=True, errors="coerce")
+-    clipped = frame.loc[(dates >= start_ts) & (dates < end_ts)].copy()
+-    if len(clipped) < 128:
+-        raise ValueError(f"Training window has only {len(clipped)} rows: {start_ts} .. {end_ts}")
++    clipped = frame.loc[(dates >= source_start) & (dates < end_ts)].copy()
++    in_window = int(((dates >= start_ts) & (dates < end_ts)).sum())
++    if in_window < 1:
++        raise ValueError(
++            f"Training source window for {timeframe} has no in-range candles: "
++            f"{start_ts} .. {end_ts}"
++        )
+     return clipped
+ 
+ 
+@@ -173,8 +188,12 @@
+     ).validate()
+ 
+ 
+-def _train_online_windowed(api, torch, agent, dataset, env_cfg, train_cfg, mem_cfg, steps, segment_steps):
+-    env = api["VectorizedHedgeEnv"](dataset, env_cfg, device=train_cfg.device, memory_config=mem_cfg)
++def _train_online_windowed(
++    api, torch, agent, dataset, env_cfg, train_cfg, mem_cfg, steps, segment_steps
++):
++    env = api["VectorizedHedgeEnv"](
++        dataset, env_cfg, device=train_cfg.device, memory_config=mem_cfg
++    )
+     buffer = api["TensorReplayBuffer"](
+         train_cfg.replay_capacity,
+         env.observation_dim,
+@@ -201,7 +220,11 @@
+                 start = int(rng.integers(0, max_start + 1)) if max_start > 0 else 0
+                 obs, _ = env.reset(start_index=start)
+                 segment_left = min(segment_steps, env.market.time_steps - start - 1)
+-            action = env.sample_random_action() if transition_count < train_cfg.warmup_steps else agent.act(obs, deterministic=False)
++            action = (
++                env.sample_random_action()
++                if transition_count < train_cfg.warmup_steps
++                else agent.act(obs, deterministic=False)
++            )
+             step = env.step(action)
+             segment_left -= 1
+             done = torch.logical_or(step.terminated, step.truncated)
+@@ -284,8 +307,20 @@
+         self.done = np.empty((0, 1), dtype=np.float32)
+ 
+ 
+-def _offline_behavior(api, torch, dataset, env_cfg, train_cfg, mem_cfg, rows_target, segment_steps, signal_index):
+-    env = api["VectorizedHedgeEnv"](dataset, env_cfg, device=train_cfg.device, memory_config=mem_cfg)
++def _offline_behavior(
++    api,
++    torch,
++    dataset,
++    env_cfg,
++    train_cfg,
++    mem_cfg,
++    rows_target,
++    segment_steps,
++    signal_index,
++):
++    env = api["VectorizedHedgeEnv"](
++        dataset, env_cfg, device=train_cfg.device, memory_config=mem_cfg
++    )
+     rng = np.random.default_rng(train_cfg.seed + 101)
+     obs_rows: list[np.ndarray] = []
+     action_rows: list[np.ndarray] = []
+@@ -352,13 +387,16 @@
+     spec, timeframe: str, feature_names: tuple[str, ...], *, repo_root: Path
+ ) -> dict[str, object]:
+     source_contract = source_contract_payload(suite_root=HERE, repo_root=repo_root)
++    inputs = input_timeframes_for(timeframe)
+     return runtime_contract_payload(
+         model_key=spec.key,
+         algorithm=spec.algorithm,
+         strategy_class=spec.strategy_class,
+-        timeframe=timeframe,
++        base_timeframe=timeframe,
++        input_timeframes=inputs,
+         feature_version=FEATURE_VERSION,
+         feature_names=feature_names,
++        alignment_contract=MTF_ALIGNMENT_CONTRACT,
+         action_config=ACTION_KWARGS,
+         cost_config=COST_KWARGS,
+         reward_config=reward_kwargs(spec),
+@@ -403,47 +441,68 @@
+     datadir = Path(args.datadir).resolve()
+     user_data = Path(args.user_data_dir).resolve()
+     spec = MODELS[args.model]
+-    artifact_dir = user_data / "hprl_freqtrade_models" / spec.key / args.timeframe
++    base_timeframe = args.timeframe
++    input_timeframes = input_timeframes_for(base_timeframe)
++    artifact_dir = user_data / "hprl_freqtrade_models" / spec.key / base_timeframe
+     checkpoint = artifact_dir / "checkpoint.pt"
+     checkpoint_sidecar = artifact_dir / "checkpoint.pt.json"
+     scaler_path = artifact_dir / "scaler.npz"
+     metadata_path = artifact_dir / "metadata.json"
+     manifest_path = artifact_dir / "artifact_manifest.json"
+ 
+-    frame, data_format = _load_history(repo_root, datadir, args.timeframe, args.data_format)
+-    train_frame = _training_frame(frame, args.train_start, args.train_end)
+-    if str(repo_root) not in sys.path:
+-        sys.path.insert(0, str(repo_root))
+-    from freqtrade.exchange import timeframe_to_seconds
++    frames: dict[str, pd.DataFrame] = {}
++    data_formats: dict[str, str] = {}
++    for timeframe in input_timeframes:
++        frame, resolved_format = _load_history(repo_root, datadir, timeframe, args.data_format)
++        frames[timeframe] = _source_frame(frame, timeframe, args.train_start, args.train_end)
++        data_formats[timeframe] = resolved_format
++        del frame
++    resolved_formats = set(data_formats.values())
++    if len(resolved_formats) != 1:
++        raise ValueError(
++            "Formal Freqtrade backtesting accepts one OHLCV data handler per run, but the MTF "
++            f"sources resolved to different formats: {data_formats}. Convert them to one format."
++        )
++    data_format = next(iter(resolved_formats))
+ 
+-    expected_seconds = timeframe_to_seconds(args.timeframe)
+-    x_raw, y, available, timestamps, feature_names, _ = training_arrays(
+-        train_frame, expected_seconds=expected_seconds
++    x_raw, y, available, timestamps, feature_names, _, alignment_diagnostics = (
++        training_arrays_mtf(
++            frames,
++            base_timeframe=base_timeframe,
++            input_timeframes=input_timeframes,
++            start=args.train_start,
++            end=args.train_end,
++        )
+     )
+     if len(x_raw) < 256:
+-        raise ValueError(f"Only {len(x_raw)} usable causal training rows after feature warmup")
++        raise ValueError(f"Only {len(x_raw)} usable causal MTF training rows")
+     mean, std = fit_scaler(x_raw)
+     x = apply_scaler(x_raw, mean, std)
+ 
+     runtime_contract = _runtime_contract(
+-        spec, args.timeframe, feature_names, repo_root=repo_root
++        spec, base_timeframe, feature_names, repo_root=repo_root
+     )
+     runtime_contract_sha = canonical_sha256(runtime_contract)
+     training_data_contract = {
+-        "schema": "hprl-freqtrade-training-data-contract-v1",
++        "schema": "hprl-freqtrade-mtf-training-data-contract-v2",
+         "train_start": args.train_start,
+         "train_end": args.train_end,
++        "base_timeframe": base_timeframe,
++        "input_timeframes": list(input_timeframes),
+         "training_rows": int(len(x_raw)),
++        "feature_count": int(x_raw.shape[1]),
+         "features_sha256": sha256_array(x_raw),
+         "forward_returns_sha256": sha256_array(y),
+         "available_notional_sha256": sha256_array(available),
+         "timestamps_sha256": sha256_array(
+             np.asarray([pd.Timestamp(value).value for value in timestamps], dtype=np.int64)
+         ),
++        "data_formats": dict(data_formats),
++        "alignment_diagnostics": alignment_diagnostics,
+     }
+-    steps = TRAIN_STEPS[args.budget][args.timeframe]
++    steps = TRAIN_STEPS[args.budget][base_timeframe]
+     artifact_contract = {
+-        "schema": "hprl-freqtrade-artifact-contract-v1",
++        "schema": "hprl-freqtrade-mtf-artifact-contract-v2",
+         "runtime_contract_sha256": runtime_contract_sha,
+         "training_data": training_data_contract,
+         "budget": args.budget,
+@@ -465,19 +524,16 @@
+         }))
+         return 0
+ 
+-    # The manifest is the commit marker for an artifact set.  Remove it before changing
+-    # any member so an interrupted retrain can never make a mixed old/new set reusable.
++    # artifact_manifest.json is the commit marker.  Removing it first makes interrupted
++    # retraining fail closed instead of mixing old single-TF and new MTF members.
+     manifest_path.unlink(missing_ok=True)
+ 
+     api = _native(repo_root)
+     import torch
+ 
+     action_cfg, cost_cfg, reward_cfg, env_cfg, train_cfg, mem_cfg = _configs(
+-        api, spec, args.timeframe, args.device, args.parallel_envs, steps
++        api, spec, base_timeframe, args.device, args.parallel_envs, steps
+     )
+-    # Keep probe ownership independent from the training dataset.  HPRL environments own
+-    # their MarketDatasetAccessor lifecycle, so a dimension probe must never become a hidden
+-    # lifetime dependency of the dataset used for the actual trainer.
+     probe_dataset = _dataset(api, torch, x, y, available)
+     probe = api["VectorizedHedgeEnv"](
+         probe_dataset, env_cfg, device=train_cfg.device, memory_config=mem_cfg
+@@ -493,11 +549,12 @@
+     api["configure_agent_action_levels"](agent, action_cfg.level_count)
+ 
+     if spec.algorithm == "rebrac_v2":
+-        signal_index = feature_names.index("momentum_12") if "momentum_12" in feature_names else 0
++        signal_name = f"{base_timeframe}__momentum_12"
++        signal_index = feature_names.index(signal_name) if signal_name in feature_names else 0
+         rows_target = max(spec.batch_size * 8, min(60_000, steps * args.parallel_envs * 2))
+         offline = _offline_behavior(
+             api, torch, dataset, env_cfg, train_cfg, mem_cfg,
+-            rows_target, WINDOW_STEPS[args.timeframe], signal_index,
++            rows_target, WINDOW_STEPS[base_timeframe], signal_index,
+         )
+         trainer = api["OfflineTrainer"](
+             offline,
+@@ -511,7 +568,7 @@
+     else:
+         training_summary = _train_online_windowed(
+             api, torch, agent, dataset, env_cfg, train_cfg, mem_cfg,
+-            steps, WINDOW_STEPS[args.timeframe],
++            steps, WINDOW_STEPS[base_timeframe],
+         )
+ 
+     artifact_dir.mkdir(parents=True, exist_ok=True)
+@@ -529,7 +586,9 @@
+         "model": spec.key,
+         "algorithm": spec.algorithm,
+         "strategy_class": spec.strategy_class,
+-        "timeframe": args.timeframe,
++        "timeframe": base_timeframe,
++        "base_timeframe": base_timeframe,
++        "input_timeframes": list(input_timeframes),
+         "pair": "ETH/USDT:USDT",
+         "train_start": args.train_start,
+         "train_end": args.train_end,
+@@ -538,8 +597,11 @@
+         "last_training_timestamp": str(timestamps[-1]),
+         "feature_version": FEATURE_VERSION,
+         "feature_names": list(feature_names),
++        "feature_count": int(len(feature_names)),
+         "observation_dim": int(obs_dim),
+         "action_dim": int(action_dim),
++        "alignment_contract": MTF_ALIGNMENT_CONTRACT,
++        "alignment_diagnostics": alignment_diagnostics,
+         "action_config": dict(ACTION_KWARGS),
+         "cost_config": dict(COST_KWARGS),
+         "reward_config": reward_kwargs(spec),
+@@ -554,9 +616,11 @@
+         "parallel_envs": int(args.parallel_envs),
+         "device_request": args.device,
+         "data_format": data_format,
++        "data_formats": dict(data_formats),
+         "datadir": str(datadir),
+         "training_summary": training_summary,
+         "formal_backtest_authority": "freqtrade hedge-backtesting",
++        "policy_input_authority": "Freqtrade base dataframe + DataProvider informative OHLCV",
+     }
+     api["save_checkpoint"](checkpoint, agent, checkpoint_metadata)
+ 
+@@ -585,9 +649,11 @@
+     print(json.dumps({
+         "status": "PASS",
+         "model": spec.key,
+-        "timeframe": args.timeframe,
++        "base_timeframe": base_timeframe,
++        "input_timeframes": list(input_timeframes),
+         "checkpoint": str(checkpoint),
+         "training_rows": len(x),
++        "feature_count": len(feature_names),
+         "updates": training_summary.get("updates"),
+         "runtime_contract_sha256": runtime_contract_sha,
+         "artifact_contract_sha256": artifact_contract_sha,
+@@ -596,7 +662,12 @@
+ 
+ 
+ def build_parser() -> argparse.ArgumentParser:
+-    p = argparse.ArgumentParser(description="Train one native HPRL model for a formal HEDGE/Freqtrade Strategy backtest.")
++    p = argparse.ArgumentParser(
++        description=(
++            "Train one native HPRL model with causal Freqtrade-style "
++            "multi-timeframe inputs."
++        )
++    )
+     p.add_argument("--repo-root", required=True)
+     p.add_argument("--user-data-dir", required=True)
+     p.add_argument("--datadir", required=True)
+@@ -606,7 +677,7 @@
+     p.add_argument("--train-start", default="2023-08-19T00:00:00Z")
+     p.add_argument("--train-end", default="2024-08-19T00:00:00Z")
+     p.add_argument("--budget", choices=tuple(TRAIN_STEPS), default="balanced")
+-    p.add_argument("--device", default="auto")
++    p.add_argument("--device", default="cpu")
+     p.add_argument("--parallel-envs", type=int, default=16)
+     p.add_argument("--force", action="store_true")
+     return p
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/run_all.ps1 /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/run_all.ps1
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/run_all.ps1	2026-08-20 11:18:12.000000000 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/run_all.ps1	2026-08-20 12:03:51.288396094 +0000
+@@ -5,8 +5,8 @@
+     [string] $ValidationMode = "strict-oos",
+     [ValidateSet("fast", "balanced", "deep")]
+     [string] $Budget = "balanced",
+-    [string] $Device = "auto",
+-    [string] $StrategyDevice = "auto",
++    [string] $Device = "cpu",
++    [string] $StrategyDevice = "cpu",
+     [int] $ParallelEnvs = 16,
+     [int] $TaskTimeout = 0,
+     [switch] $SkipTraining,
+@@ -24,11 +24,13 @@
+     $Python = $cmd.Source
+ }
+ 
+-Write-Host "=== HPRL -> real Strategy -> HEDGE/Freqtrade 30 backtests ==="
++Write-Host "=== HPRL MTF -> real Strategy -> HEDGE/Freqtrade 30 formal backtests ==="
+ Write-Host ("RepoRoot       : " + $RepoRoot)
+ Write-Host ("SuiteRoot      : " + $SuiteRoot)
+ Write-Host ("ValidationMode : " + $ValidationMode)
+ Write-Host ("Budget         : " + $Budget)
++Write-Host ("Device         : " + $Device)
++Write-Host ("StrategyDevice : " + $StrategyDevice)
+ Write-Host ("Python         : " + $Python)
+ 
+ & $Python (Join-Path $SuiteRoot "validate_suite.py")
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/run_all.sh /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/run_all.sh
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/run_all.sh	2026-08-20 11:18:12.000000000 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/run_all.sh	2026-08-20 12:03:51.291610311 +0000
+@@ -5,4 +5,4 @@
+ PYTHON="$REPO_ROOT/.venv/bin/python"
+ if [[ ! -x "$PYTHON" ]]; then PYTHON="${PYTHON_BIN:-python}"; fi
+ "$PYTHON" "$SUITE_ROOT/validate_suite.py" || exit $?
+-exec "$PYTHON" "$SUITE_ROOT/run_suite.py" --repo-root "$REPO_ROOT" --validation-mode strict-oos --budget balanced
++exec "$PYTHON" "$SUITE_ROOT/run_suite.py" --repo-root "$REPO_ROOT" --validation-mode strict-oos --budget balanced --device cpu --strategy-device cpu
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/run_suite.py /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/run_suite.py
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/run_suite.py	2026-08-20 11:37:48.087031719 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/run_suite.py	2026-08-20 12:14:48.605028826 +0000
+@@ -15,10 +15,12 @@
+ from pathlib import Path
+ 
+ HERE = Path(__file__).resolve().parent
+-if str(HERE) not in sys.path:
+-    sys.path.insert(0, str(HERE))
++_here_text = str(HERE)
++if _here_text in sys.path:
++    sys.path.remove(_here_text)
++sys.path.insert(0, _here_text)
+ 
+-from suite_specs import MODELS, TIMEFRAMES
++from suite_specs import MODELS, TIMEFRAMES, input_timeframes_for
+ 
+ 
+ def utc_tag() -> str:
+@@ -35,7 +37,8 @@
+ 
+ def write_json(path: Path, payload: object) -> None:
+     path.parent.mkdir(parents=True, exist_ok=True)
+-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
++    text = json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n"
++    path.write_text(text, encoding="utf-8")
+ 
+ 
+ def python_executable(repo_root: Path) -> Path:
+@@ -73,7 +76,12 @@
+         return ""
+ 
+ 
+-def run_process(command: list[str], log_path: Path, env: dict[str, str] | None = None, timeout: int = 0):
++def run_process(
++    command: list[str],
++    log_path: Path,
++    env: dict[str, str] | None = None,
++    timeout: int = 0,
++):
+     log_path.parent.mkdir(parents=True, exist_ok=True)
+     started = time.time()
+     with log_path.open("w", encoding="utf-8", errors="replace") as log:
+@@ -97,7 +105,11 @@
+             }
+         except subprocess.TimeoutExpired:
+             log.write("\nTIMEOUT\n")
+-            return {"returncode": 124, "seconds": round(time.time() - started, 3), "timed_out": True}
++            return {
++                "returncode": 124,
++                "seconds": round(time.time() - started, 3),
++                "timed_out": True,
++            }
+         except Exception as exc:
+             log.write("\nMASTER ERROR\n" + traceback.format_exc())
+             return {
+@@ -181,6 +193,8 @@
+         "run_all.sh",
+         "validate_suite.py",
+         "PACKAGE_MANIFEST.json",
++        "SOURCE_IMPROVEMENTS.md",
++        "Install-HPRL-Freqtrade-MTF-V3.ps1",
+     ):
+         src = HERE / name
+         if src.exists():
+@@ -210,7 +224,11 @@
+     for model in MODELS:
+         for timeframe in TIMEFRAMES:
+             directory = root / model / timeframe
+-            record: dict[str, object] = {"model": model, "timeframe": timeframe, "directory": str(directory)}
++            record: dict[str, object] = {
++                "model": model,
++                "timeframe": timeframe,
++                "directory": str(directory),
++            }
+             for filename in (
+                 "checkpoint.pt",
+                 "checkpoint.pt.json",
+@@ -248,17 +266,26 @@
+ 
+ 
+ def main(argv: list[str] | None = None) -> int:
+-    p = argparse.ArgumentParser(description="Run 5 native HPRL Strategies x 6 timeframes through formal HEDGE/Freqtrade hedge-backtesting.")
++    p = argparse.ArgumentParser(
++        description=(
++            "Run 5 native HPRL Strategies x 6 base timeframes with causal "
++            "Freqtrade informative MTF inputs."
++        )
++    )
+     p.add_argument("--repo-root", default=".")
+     p.add_argument("--datadir")
+     p.add_argument("--data-format", default="auto")
+     p.add_argument("--train-start", default="2023-08-19T00:00:00Z")
+     p.add_argument("--backtest-start", default="2024-08-19T00:00:00Z")
+     p.add_argument("--end", default="2026-08-19T00:00:00Z")
+-    p.add_argument("--validation-mode", choices=("strict-oos", "two-year-split", "integration-full"), default="strict-oos")
++    p.add_argument(
++        "--validation-mode",
++        choices=("strict-oos", "two-year-split", "integration-full"),
++        default="strict-oos",
++    )
+     p.add_argument("--budget", choices=("fast", "balanced", "deep"), default="balanced")
+-    p.add_argument("--device", default="auto")
+-    p.add_argument("--strategy-device", default="auto")
++    p.add_argument("--device", default="cpu")
++    p.add_argument("--strategy-device", default="cpu")
+     p.add_argument("--parallel-envs", type=int, default=16)
+     p.add_argument("--task-timeout", type=int, default=0)
+     p.add_argument("--skip-training", action="store_true")
+@@ -272,8 +299,12 @@
+     user_data = repo_root / "user_data"
+     datadir = Path(args.datadir).resolve() if args.datadir else default_datadir(repo_root)
+     py = python_executable(repo_root)
+-    output_base = Path(args.output_dir).resolve() if args.output_dir else repo_root / "hprl_freqtrade_results"
+-    run_root = output_base / f"HPRL_FREQTRADE_30_{utc_tag()}"
++    output_base = (
++        Path(args.output_dir).resolve()
++        if args.output_dir
++        else repo_root / "hprl_freqtrade_results"
++    )
++    run_root = output_base / f"HPRL_FREQTRADE_MTF_30_{utc_tag()}"
+     (run_root / "logs" / "training").mkdir(parents=True, exist_ok=False)
+     (run_root / "logs" / "backtests").mkdir(parents=True)
+     (run_root / "backtests").mkdir(parents=True)
+@@ -285,7 +316,7 @@
+     timerange = freqtrade_timerange(bt_start, bt_end)
+     sha = git_sha(repo_root)
+     manifest = {
+-        "schema": "hprl-freqtrade-30-suite-v2",
++        "schema": "hprl-freqtrade-mtf-30-suite-v3",
+         "repository": "XXA222/HEDGE",
+         "git_sha": sha,
+         "validation_mode": args.validation_mode,
+@@ -293,9 +324,13 @@
+         "formal_backtest_window": [bt_start, bt_end],
+         "formal_backtest_timerange": timerange,
+         "performance_authority": "python -m freqtrade hedge-backtesting",
+-        "policy_provider": "native HPRL agent + VectorizedHedgeEnv + HprlHedgeAdapter inside real IStrategy",
++        "policy_provider": (
++            "native HPRL agent + causal Freqtrade informative MTF features + "
++            "VectorizedHedgeEnv + HprlHedgeAdapter inside real IStrategy"
++        ),
+         "pair": "ETH/USDT:USDT",
+-        "timeframes": list(TIMEFRAMES),
++        "base_timeframes": list(TIMEFRAMES),
++        "mtf_inputs": {tf: list(input_timeframes_for(tf)) for tf in TIMEFRAMES},
+         "models": list(MODELS),
+         "tasks_expected": len(TIMEFRAMES) * len(MODELS),
+         "budget": args.budget,
+@@ -336,8 +371,19 @@
+                 if args.force_training:
+                     cmd.append("--force")
+                 commands.append(subprocess.list2cmdline(cmd))
+-                status = run_process(cmd, run_root / "logs" / "training" / f"{model}_{tf}.log", env, args.task_timeout)
+-                row = {"phase": "training", "model": model, "timeframe": tf, **status}
++                status = run_process(
++                    cmd,
++                    run_root / "logs" / "training" / f"{model}_{tf}.log",
++                    env,
++                    args.task_timeout,
++                )
++                row = {
++                    "phase": "training",
++                    "model": model,
++                    "timeframe": tf,
++                    "input_timeframes": list(input_timeframes_for(tf)),
++                    **status,
++                }
+                 training_rows.append(row)
+                 if status["returncode"] != 0:
+                     failures.append({**row, "log": f"logs/training/{model}_{tf}.log"})
+@@ -366,15 +412,25 @@
+             if resolved_data_format:
+                 cmd.extend(["--data-format-ohlcv", resolved_data_format])
+             commands.append(subprocess.list2cmdline(cmd))
+-            status = run_process(cmd, run_root / "logs" / "backtests" / f"{task_name}.log", env, args.task_timeout)
++            status = run_process(
++                cmd,
++                run_root / "logs" / "backtests" / f"{task_name}.log",
++                env,
++                args.task_timeout,
++            )
+             row: dict[str, object] = {
+                 "model": model,
+                 "algorithm": spec.algorithm,
+                 "strategy": spec.strategy_class,
+                 "timeframe": tf,
++                "input_timeframes": "+".join(input_timeframes_for(tf)),
+                 "status": "PASS" if status["returncode"] == 0 and result_path.is_file() else "FAIL",
+                 **status,
+-                "result_file": str(result_path.relative_to(run_root)) if result_path.is_file() else "",
++                "result_file": (
++                    str(result_path.relative_to(run_root))
++                    if result_path.is_file()
++                    else ""
++                ),
+                 "log_file": f"logs/backtests/{task_name}.log",
+             }
+             row.update(parse_result(result_path))
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_base.py /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_base.py
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_base.py	2026-08-20 11:43:05.567219235 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_base.py	1970-01-01 00:00:00.000000000 +0000
+@@ -1,495 +0,0 @@
+-from __future__ import annotations
+-
+-import json
+-import os
+-import sys
+-from dataclasses import asdict
+-from datetime import timedelta
+-from decimal import Decimal
+-from pathlib import Path
+-
+-import numpy as np
+-from pandas import DataFrame, Timestamp
+-
+-from freqtrade.exchange import timeframe_to_seconds
+-from freqtrade.strategy import IStrategy
+-
+-SUITE_ROOT = Path(__file__).resolve().parent.parent
+-if str(SUITE_ROOT) not in sys.path:
+-    sys.path.insert(0, str(SUITE_ROOT))
+-
+-from artifact_contract import (
+-    ARTIFACT_MANIFEST_SCHEMA,
+-    MODEL_METADATA_SCHEMA,
+-    canonical_sha256,
+-    runtime_contract_payload,
+-    source_contract_payload,
+-    verify_manifest_files,
+-)
+-from features import FEATURE_VERSION, apply_scaler, inference_arrays
+-from suite_specs import ACTION_KWARGS, COST_KWARGS, MODELS, PERIODS_PER_YEAR, reward_kwargs
+-
+-
+-class HPRLNativeHedgeStrategyBase(IStrategy):
+-    """Native HPRL policy provider for the canonical HEDGE/Freqtrade Strategy contract.
+-
+-    The class intentionally does not implement TD3/SAC/XQC/ReBRAC and does not own
+-    authoritative fills or portfolio PnL.  It loads one repository-native HPRL checkpoint,
+-    advances the native policy state in causal order, validates the emitted tier target with
+-    ``HprlHedgeAdapter``, and writes only the canonical ``hedge_*`` directive columns.
+-
+-    The native HPRL environment used here is a policy-state shadow because the current
+-    historical Freqtrade lifecycle analyzes the Strategy dataframe before HEDGE event replay.
+-    HEDGE remains the only authority for fills, fees, funding, wallet state and final PnL.
+-    """
+-
+-    INTERFACE_VERSION = 3
+-    can_short = True
+-    timeframe = "1m"
+-    startup_candle_count = 64
+-    process_only_new_candles = True
+-    minimal_roi = {"0": 10.0}
+-    stoploss = -0.99
+-    trailing_stop = False
+-    use_exit_signal = False
+-    exit_profit_only = False
+-    ignore_roi_if_entry_signal = True
+-
+-    MODEL_KEY = ""
+-
+-    @classmethod
+-    def version(cls) -> str:
+-        return f"hprl-freqtrade-v2.1:{cls.MODEL_KEY}"
+-
+-    def _artifact_dir(self) -> Path:
+-        user_data = Path(str(self.config.get("user_data_dir", "user_data"))).resolve()
+-        return user_data / "hprl_freqtrade_models" / self.MODEL_KEY / self.timeframe
+-
+-    def _native_configs(self, api, device: str):
+-        spec = MODELS[self.MODEL_KEY]
+-        action = api["HPRLActionConfig"](**ACTION_KWARGS)
+-        costs = api["HPRLCostConfig"](**COST_KWARGS)
+-        reward = api["HPRLRewardConfig"](**reward_kwargs(spec))
+-        env = api["HPRLEnvironmentConfig"](
+-            initial_equity=1000.0,
+-            parallel_envs=1,
+-            annualization_periods=PERIODS_PER_YEAR[self.timeframe],
+-            cvar_alpha=0.05,
+-            terminate_equity_ratio=0.20,
+-            runtime_checks=False,
+-            info_mode="full",
+-            action=action,
+-            costs=costs,
+-            reward=reward,
+-        )
+-        train = api["HPRLTrainingConfig"](
+-            algorithm=spec.algorithm,
+-            seed=42,
+-            device=device,
+-            replay_device="same",
+-            batch_size=spec.batch_size,
+-            replay_capacity=spec.replay_capacity,
+-            warmup_steps=spec.warmup_transitions,
+-            gradient_steps=1,
+-            gamma=spec.gamma,
+-            tau=spec.tau,
+-            learning_rate=spec.learning_rate,
+-            hidden_dim=spec.hidden_dim,
+-            hidden_depth=spec.hidden_depth,
+-            gradient_clip_norm=spec.gradient_clip_norm,
+-            mixed_precision=False,
+-            compile_mode="off",
+-            expected_updates=0,
+-            metrics_interval=100,
+-            tier_entropy_target_fraction=spec.tier_entropy_target_fraction,
+-            runtime_checks=False,
+-        )
+-        memory = api["HPRLMemoryConfig"](
+-            dataset_mode="auto",
+-            dataset_window_steps=16_384,
+-            dataset_gpu_fraction=0.20,
+-            replay_gpu_fraction=0.30,
+-            release_offline_source_after_tensorize=True,
+-        )
+-        return action, env, train, memory
+-
+-    @staticmethod
+-    def _native_api():
+-        from freqtrade.hedge.hprl.action_space import configure_agent_action_levels
+-        from freqtrade.hedge.hprl.checkpoint import load_checkpoint
+-        from freqtrade.hedge.hprl.config import (
+-            HPRLActionConfig,
+-            HPRLCostConfig,
+-            HPRLEnvironmentConfig,
+-            HPRLMemoryConfig,
+-            HPRLRewardConfig,
+-            HPRLTrainingConfig,
+-        )
+-        from freqtrade.hedge.hprl.contracts import PlannedExecutionIntent
+-        from freqtrade.hedge.hprl.data import TensorMarketDataset
+-        from freqtrade.hedge.hprl.env import VectorizedHedgeEnv
+-        from freqtrade.hedge.hprl.registry import create_agent
+-        from freqtrade.hedge.production.hprl_hedge_adapter import (
+-            HprlHedgeAdapter,
+-            HprlHedgeAdapterPolicy,
+-            HprlTargetUnit,
+-        )
+-
+-        return locals()
+-
+-    def _runtime_contract(self, feature_names: tuple[str, ...]) -> dict[str, object]:
+-        import freqtrade
+-
+-        spec = MODELS[self.MODEL_KEY]
+-        repo_root = Path(freqtrade.__file__).resolve().parent.parent
+-        source_contract = source_contract_payload(suite_root=SUITE_ROOT, repo_root=repo_root)
+-        return runtime_contract_payload(
+-            model_key=spec.key,
+-            algorithm=spec.algorithm,
+-            strategy_class=spec.strategy_class,
+-            timeframe=self.timeframe,
+-            feature_version=FEATURE_VERSION,
+-            feature_names=feature_names,
+-            action_config=ACTION_KWARGS,
+-            cost_config=COST_KWARGS,
+-            reward_config=reward_kwargs(spec),
+-            model_spec=asdict(spec),
+-            source_contract=source_contract,
+-        )
+-
+-    @staticmethod
+-    def _utc_close_timestamp(value: object, candle_seconds: int):
+-        timestamp = Timestamp(value)
+-        if timestamp.tzinfo is None:
+-            timestamp = timestamp.tz_localize("UTC")
+-        else:
+-            timestamp = timestamp.tz_convert("UTC")
+-        return timestamp.to_pydatetime() + timedelta(seconds=candle_seconds)
+-
+-    @staticmethod
+-    def _exact_notional_from_tier(action_cfg, decoded, side_index: int) -> float:
+-        # Never derive production ratios from float32 target_margin.  The codec already
+-        # exposes the executed integer tier index, so map that index back to the configured
+-        # decimal level and only then apply leverage.  This prevents a legal 12% -> 20%
+-        # transition from becoming 0.08000000... and being rejected by Decimal risk checks.
+-        index = int(decoded.executed_level_index[0, 0, side_index].detach().cpu().item())
+-        levels = tuple(action_cfg.position_levels)
+-        if not 0 <= index < len(levels):
+-            raise RuntimeError(f"native HPRL codec returned invalid tier index: {index}")
+-        margin = Decimal(str(levels[index]))
+-        leverage = Decimal(str(action_cfg.leverage))
+-        return float(margin * leverage)
+-
+-    def _load_artifact_contract(
+-        self,
+-        *,
+-        artifact: Path,
+-        feature_names: tuple[str, ...],
+-    ) -> tuple[dict[str, object], dict[str, object], str, str]:
+-        manifest_path = artifact / "artifact_manifest.json"
+-        metadata_path = artifact / "metadata.json"
+-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+-        if manifest.get("schema") != ARTIFACT_MANIFEST_SCHEMA:
+-            raise RuntimeError("HPRL artifact manifest schema is not supported")
+-        if metadata.get("schema") != MODEL_METADATA_SCHEMA:
+-            raise RuntimeError("HPRL model metadata schema is not supported")
+-
+-        spec = MODELS[self.MODEL_KEY]
+-        identity = (
+-            metadata.get("model"),
+-            metadata.get("algorithm"),
+-            metadata.get("strategy_class"),
+-            metadata.get("timeframe"),
+-            metadata.get("pair"),
+-        )
+-        expected_identity = (
+-            self.MODEL_KEY,
+-            spec.algorithm,
+-            spec.strategy_class,
+-            self.timeframe,
+-            "ETH/USDT:USDT",
+-        )
+-        if identity != expected_identity:
+-            raise RuntimeError(
+-                f"HPRL artifact identity mismatch: expected={expected_identity}, actual={identity}"
+-            )
+-        if metadata.get("feature_version") != FEATURE_VERSION:
+-            raise RuntimeError(
+-                f"HPRL feature contract mismatch: {metadata.get('feature_version')} != {FEATURE_VERSION}"
+-            )
+-        if tuple(metadata.get("feature_names", ())) != feature_names:
+-            raise RuntimeError("HPRL metadata feature names do not match Strategy features")
+-
+-        runtime_contract_sha = canonical_sha256(self._runtime_contract(feature_names))
+-        artifact_contract_sha = str(metadata.get("artifact_contract_sha256") or "")
+-        if metadata.get("runtime_contract_sha256") != runtime_contract_sha:
+-            raise RuntimeError("HPRL runtime contract changed; checkpoint retraining is required")
+-        if manifest.get("runtime_contract_sha256") != runtime_contract_sha:
+-            raise RuntimeError("HPRL artifact manifest runtime contract does not match current source")
+-        if not artifact_contract_sha or manifest.get("artifact_contract_sha256") != artifact_contract_sha:
+-            raise RuntimeError("HPRL artifact contract hash is missing or inconsistent")
+-
+-        verify_manifest_files(artifact, manifest)
+-        return metadata, manifest, runtime_contract_sha, artifact_contract_sha
+-
+-    def _generate_hprl_columns(self, dataframe: DataFrame, pair: str) -> DataFrame:
+-        if self.MODEL_KEY not in MODELS:
+-            raise RuntimeError(f"Unknown HPRL Strategy model key: {self.MODEL_KEY!r}")
+-        if pair != "ETH/USDT:USDT":
+-            raise RuntimeError(f"HPRL ETH Strategy received unsupported pair: {pair!r}")
+-
+-        artifact = self._artifact_dir()
+-        checkpoint = artifact / "checkpoint.pt"
+-        checkpoint_sidecar = artifact / "checkpoint.pt.json"
+-        scaler_path = artifact / "scaler.npz"
+-        metadata_path = artifact / "metadata.json"
+-        manifest_path = artifact / "artifact_manifest.json"
+-        required = (checkpoint, checkpoint_sidecar, scaler_path, metadata_path, manifest_path)
+-        missing = [str(path) for path in required if not path.is_file()]
+-        if missing:
+-            raise FileNotFoundError(
+-                "Native HPRL model artifact set is incomplete; prepare/retrain the model first: "
+-                + ", ".join(missing)
+-            )
+-
+-        candle_seconds = timeframe_to_seconds(self.timeframe)
+-        x_raw, y, available, timestamps, feature_names, valid_positions = inference_arrays(
+-            dataframe,
+-            expected_seconds=candle_seconds,
+-        )
+-        if len(x_raw) < 2:
+-            raise RuntimeError("Not enough causal HPRL feature rows in Freqtrade analyzed dataframe")
+-
+-        with np.load(scaler_path, allow_pickle=False) as scale:
+-            mean = scale["mean"].astype(np.float32, copy=True)
+-            std = scale["std"].astype(np.float32, copy=True)
+-            saved_names = tuple(str(value) for value in scale["feature_names"].tolist())
+-            scaler_runtime_sha = str(scale["runtime_contract_sha256"].item())
+-            scaler_artifact_sha = str(scale["artifact_contract_sha256"].item())
+-        if saved_names != feature_names:
+-            raise RuntimeError("HPRL scaler and Strategy feature names are not identical")
+-
+-        metadata, _manifest, runtime_contract_sha, artifact_contract_sha = (
+-            self._load_artifact_contract(artifact=artifact, feature_names=feature_names)
+-        )
+-        if scaler_runtime_sha != runtime_contract_sha or scaler_artifact_sha != artifact_contract_sha:
+-            raise RuntimeError("HPRL scaler contract hashes do not match the committed artifact set")
+-        x = apply_scaler(x_raw, mean, std)
+-
+-        api = self._native_api()
+-        import torch
+-
+-        zeros = np.zeros(len(x), dtype=np.float32)
+-        dataset = api["TensorMarketDataset"](
+-            features=torch.as_tensor(x[:, None, :], dtype=torch.float32),
+-            forward_returns=torch.as_tensor(y[:, None], dtype=torch.float32),
+-            funding_rates=torch.as_tensor(zeros[:, None], dtype=torch.float32),
+-            available_notional=torch.as_tensor(available[:, None], dtype=torch.float32),
+-            symbols=("ETHUSDT",),
+-        ).validate()
+-
+-        device = os.environ.get("HPRL_STRATEGY_DEVICE", "auto")
+-        action_cfg, env_cfg, train_cfg, memory_cfg = self._native_configs(api, device)
+-        env = api["VectorizedHedgeEnv"](
+-            dataset, env_cfg, device=train_cfg.device, memory_config=memory_cfg
+-        )
+-        agent = api["create_agent"](
+-            MODELS[self.MODEL_KEY].algorithm,
+-            env.observation_dim,
+-            env.action_dim,
+-            train_cfg,
+-            device=None,
+-        )
+-        api["configure_agent_action_levels"](agent, action_cfg.level_count)
+-        loaded_meta = api["load_checkpoint"](
+-            checkpoint, agent, map_location="agent", restore_rng=False
+-        )
+-        checkpoint_identity = (
+-            loaded_meta.get("schema"),
+-            loaded_meta.get("model"),
+-            loaded_meta.get("algorithm"),
+-            loaded_meta.get("strategy_class"),
+-            loaded_meta.get("timeframe"),
+-            loaded_meta.get("feature_version"),
+-            loaded_meta.get("runtime_contract_sha256"),
+-            loaded_meta.get("artifact_contract_sha256"),
+-            loaded_meta.get("observation_dim"),
+-            loaded_meta.get("action_dim"),
+-        )
+-        expected_checkpoint_identity = (
+-            MODEL_METADATA_SCHEMA,
+-            self.MODEL_KEY,
+-            MODELS[self.MODEL_KEY].algorithm,
+-            MODELS[self.MODEL_KEY].strategy_class,
+-            self.timeframe,
+-            FEATURE_VERSION,
+-            runtime_contract_sha,
+-            artifact_contract_sha,
+-            env.observation_dim,
+-            env.action_dim,
+-        )
+-        if checkpoint_identity != expected_checkpoint_identity:
+-            env.close(aggressive=False)
+-            raise RuntimeError(
+-                "HPRL checkpoint embedded metadata does not match current Strategy contract: "
+-                f"expected={expected_checkpoint_identity}, actual={checkpoint_identity}"
+-            )
+-        if metadata.get("observation_dim") != env.observation_dim or metadata.get("action_dim") != env.action_dim:
+-            env.close(aggressive=False)
+-            raise RuntimeError("HPRL metadata observation/action dimensions do not match native env")
+-
+-        adapter_policy = api["HprlHedgeAdapterPolicy"].from_hprl_action_config(
+-            action_cfg,
+-            target_unit=api["HprlTargetUnit"].NOTIONAL_EQUITY_RATIO,
+-        )
+-        adapter = api["HprlHedgeAdapter"](adapter_policy)
+-
+-        row_count = len(dataframe)
+-        long_score = np.zeros(row_count, dtype=np.float32)
+-        short_score = np.zeros(row_count, dtype=np.float32)
+-        target_net = np.full(row_count, np.nan, dtype=np.float64)
+-        target_net_ratio = np.full(row_count, np.nan, dtype=np.float64)
+-        confidence = np.ones(row_count, dtype=np.float32)
+-        risk_scale = np.ones(row_count, dtype=np.float32)
+-        long_scale = np.zeros(row_count, dtype=np.float32)
+-        short_scale = np.zeros(row_count, dtype=np.float32)
+-        allow_new_risk = np.zeros(row_count, dtype=bool)
+-        regime = np.full(row_count, "HPRL", dtype=object)
+-        reason = np.full(row_count, "HPRL_STARTUP", dtype=object)
+-        model_version = np.full(row_count, self.version(), dtype=object)
+-
+-        # Freqtrade analyzes startup candles, then HEDGE trims exactly
+-        # ``startup_candle_count`` rows before replay.  Reset the shadow account at the same
+-        # boundary so the first formal HEDGE bar and the policy both start from flat equity.
+-        formal_start_position = int(self.startup_candle_count)
+-        start_decision = int(np.searchsorted(valid_positions, formal_start_position, side="left"))
+-        if start_decision >= len(valid_positions) or int(valid_positions[start_decision]) != formal_start_position:
+-            env.close(aggressive=False)
+-            raise RuntimeError(
+-                "HPRL startup_candle_count does not cover the complete feature warmup at the "
+-                f"formal replay boundary: startup={formal_start_position}, "
+-                f"first_valid={int(valid_positions[0])}"
+-            )
+-        if start_decision >= env.market.time_steps - 1:
+-            env.close(aggressive=False)
+-            raise RuntimeError("HPRL formal replay has fewer than two realizable policy timesteps")
+-
+-        obs, _ = env.reset(start_index=start_decision)
+-        previous_projection = None
+-        model_id = f"hprl/{MODELS[self.MODEL_KEY].algorithm}/{self.timeframe}"
+-        shadow_autoresets = 0
+-        try:
+-            for decision_index in range(start_decision, env.market.time_steps):
+-                # Decide first.  No realized forward return for this row has been consumed yet.
+-                action = agent.act(obs, deterministic=True)
+-                shaped = action
+-                if tuple(action.shape) == (env.envs, env.action_dim):
+-                    shaped = action.reshape(env.envs, env.symbols, 2)
+-                if tuple(shaped.shape) != (env.envs, env.symbols, 2):
+-                    raise RuntimeError(
+-                        f"native HPRL agent returned invalid action shape: {tuple(action.shape)}"
+-                    )
+-                if env.tiered_codec is None:
+-                    raise RuntimeError("Formal HPRL Strategy requires tiered action mode")
+-                decoded = env.tiered_codec.decode(shaped, env.margin_position)
+-                long_notional = self._exact_notional_from_tier(action_cfg, decoded, 0)
+-                short_notional = self._exact_notional_from_tier(action_cfg, decoded, 1)
+-
+-                observed_at = self._utc_close_timestamp(
+-                    timestamps[decision_index], candle_seconds
+-                )
+-                intent = api["PlannedExecutionIntent"](
+-                    symbol=pair,
+-                    target_long_exposure=long_notional,
+-                    target_short_exposure=short_notional,
+-                    confidence=1.0,
+-                    model_id=model_id,
+-                    metadata={"source": "freqtrade-strategy-native-hprl"},
+-                )
+-                projection = adapter.adapt(
+-                    intent,
+-                    sequence=decision_index - start_decision,
+-                    observed_at=observed_at,
+-                    now=observed_at,
+-                    previous=previous_projection,
+-                )
+-                if not projection.accepted:
+-                    raise RuntimeError(
+-                        "native HPRL tier codec produced a target rejected by the production "
+-                        f"adapter at row={decision_index}: {projection.reasons}"
+-                    )
+-                signal = adapter.signal_snapshot_kwargs(
+-                    projection,
+-                    timeframe=self.timeframe,
+-                    candle_close_time=observed_at,
+-                    feature_timestamp=observed_at,
+-                )
+-                row_position = int(valid_positions[decision_index])
+-                long_score[row_position] = float(signal["long_score"])
+-                short_score[row_position] = float(signal["short_score"])
+-                confidence[row_position] = float(signal["confidence"])
+-                risk_scale[row_position] = float(signal["risk_scale"])
+-                long_scale[row_position] = float(signal["long_exposure_scale"])
+-                short_scale[row_position] = float(signal["short_exposure_scale"])
+-                allow_new_risk[row_position] = bool(signal["allow_new_risk"])
+-                regime[row_position] = str(signal["regime"])
+-                reason[row_position] = str(signal["reason"])
+-                model_version[row_position] = str(signal["model_version"])
+-                previous_projection = projection
+-
+-                if decision_index >= env.market.time_steps - 1:
+-                    break
+-
+-                # Realize only after the target for this row is frozen.  A shadow-account
+-                # termination must not terminate the formal HEDGE Strategy.  The native env
+-                # autoresets terminated rows internally and returns the reset observation.
+-                step = env.step(action)
+-                if bool(step.terminated[0].item()):
+-                    shadow_autoresets += 1
+-                if bool(step.info.get("time_done", False)):
+-                    break
+-                obs = step.observation
+-        finally:
+-            env.close(aggressive=False)
+-
+-        # Assign columns in bulk.  Avoid a million DataFrame.at writes on 1m history and keep
+-        # the exact canonical HEDGE surface explicit, including both nullable target fields.
+-        dataframe["hedge_long_score"] = long_score
+-        dataframe["hedge_short_score"] = short_score
+-        dataframe["hedge_target_net"] = target_net
+-        dataframe["hedge_target_net_ratio"] = target_net_ratio
+-        dataframe["hedge_confidence"] = confidence
+-        dataframe["hedge_risk_scale"] = risk_scale
+-        dataframe["hedge_long_exposure_scale"] = long_scale
+-        dataframe["hedge_short_exposure_scale"] = short_scale
+-        dataframe["hedge_allow_new_risk"] = allow_new_risk
+-        dataframe["hedge_regime"] = regime
+-        dataframe["hedge_reason"] = reason
+-        dataframe["hedge_model_version"] = model_version
+-        # Keep the autoreset counter internal: extra full-history diagnostic columns would
+-        # unnecessarily increase the 1m dataframe footprint.  The important semantic rule is
+-        # that a shadow autoreset never terminates formal Strategy signal generation.
+-        _ = shadow_autoresets
+-        return dataframe
+-
+-    def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+-        pair = str(metadata.get("pair") or "ETH/USDT:USDT")
+-        return self._generate_hprl_columns(dataframe, pair)
+-
+-    def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+-        del metadata
+-        allowed = dataframe["hedge_allow_new_risk"].astype(bool)
+-        dataframe["enter_long"] = (
+-            (dataframe["hedge_long_exposure_scale"] > 0) & allowed
+-        ).astype(int)
+-        dataframe["enter_short"] = (
+-            (dataframe["hedge_short_exposure_scale"] > 0) & allowed
+-        ).astype(int)
+-        return dataframe
+-
+-    def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+-        del metadata
+-        dataframe["exit_long"] = 0
+-        dataframe["exit_short"] = 0
+-        return dataframe
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_fast_dsac_eth.py /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_fast_dsac_eth.py
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_fast_dsac_eth.py	2026-08-20 11:15:56.000000000 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_fast_dsac_eth.py	2026-08-20 12:09:08.715862466 +0000
+@@ -1,4 +1,4 @@
+-from hprl_base import HPRLNativeHedgeStrategyBase
++from hprl_mtf_v3_base import HPRLNativeHedgeStrategyBase
+ 
+ 
+ class HPRLFastDSACETHStrategy(HPRLNativeHedgeStrategyBase):
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_fast_td3_eth.py /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_fast_td3_eth.py
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_fast_td3_eth.py	2026-08-20 11:15:56.000000000 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_fast_td3_eth.py	2026-08-20 12:09:08.723610311 +0000
+@@ -1,4 +1,4 @@
+-from hprl_base import HPRLNativeHedgeStrategyBase
++from hprl_mtf_v3_base import HPRLNativeHedgeStrategyBase
+ 
+ 
+ class HPRLFastTD3ETHStrategy(HPRLNativeHedgeStrategyBase):
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_mtf_v3_base.py /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_mtf_v3_base.py
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_mtf_v3_base.py	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_mtf_v3_base.py	2026-08-20 12:14:48.605317099 +0000
+@@ -0,0 +1,584 @@
++from __future__ import annotations
++
++import json
++import os
++import sys
++from dataclasses import asdict
++from datetime import timedelta
++from decimal import Decimal
++from pathlib import Path
++
++import numpy as np
++from pandas import DataFrame, Timestamp
++
++from freqtrade.exchange import timeframe_to_seconds
++from freqtrade.strategy import IStrategy
++
++SUITE_ROOT = Path(__file__).resolve().parent.parent
++_suite_root_text = str(SUITE_ROOT)
++if _suite_root_text in sys.path:
++    sys.path.remove(_suite_root_text)
++sys.path.insert(0, _suite_root_text)
++
++from artifact_contract import (
++    ARTIFACT_MANIFEST_SCHEMA,
++    MODEL_METADATA_SCHEMA,
++    canonical_sha256,
++    runtime_contract_payload,
++    source_contract_payload,
++    verify_manifest_files,
++)
++from features import FEATURE_VERSION, apply_scaler, inference_arrays_mtf
++from suite_specs import (
++    ACTION_KWARGS,
++    COST_KWARGS,
++    MODELS,
++    MTF_ALIGNMENT_CONTRACT,
++    PERIODS_PER_YEAR,
++    SOURCE_WARMUP_CANDLES,
++    informative_timeframes_for,
++    input_timeframes_for,
++    reward_kwargs,
++)
++
++
++class HPRLNativeHedgeStrategyBase(IStrategy):
++    """Native HPRL policy provider for the canonical HEDGE/Freqtrade Strategy contract.
++
++    The class intentionally does not implement TD3/SAC/XQC/ReBRAC and does not own
++    authoritative fills or portfolio PnL.  It loads one repository-native HPRL checkpoint,
++    consumes the base timeframe plus Freqtrade informative higher-timeframe OHLCV using strict
++    closed-candle alignment, advances the native
++    policy state in causal order, validates the emitted tier target with
++    ``HprlHedgeAdapter``, and writes only the canonical ``hedge_*`` directive columns.
++
++    The native HPRL environment used here is a policy-state shadow because the current
++    historical Freqtrade lifecycle analyzes the Strategy dataframe before HEDGE event replay.
++    HEDGE remains the only authority for fills, fees, funding, wallet state and final PnL.
++    """
++
++    INTERFACE_VERSION = 3
++    can_short = True
++    timeframe = "1m"
++    startup_candle_count = SOURCE_WARMUP_CANDLES
++    process_only_new_candles = True
++    minimal_roi = {"0": 10.0}
++    stoploss = -0.99
++    trailing_stop = False
++    use_exit_signal = False
++    exit_profit_only = False
++    ignore_roi_if_entry_signal = True
++
++    MODEL_KEY = ""
++
++    @classmethod
++    def version(cls) -> str:
++        return f"hprl-freqtrade-mtf-v3:{cls.MODEL_KEY}"
++
++
++    def informative_pairs(self):
++        """Register every higher timeframe with Freqtrade/DataProvider.
++
++        Freqtrade requires informative timeframes to be equal to or higher than the Strategy
++        timeframe.  The ordered suite contract therefore consumes the base timeframe plus all
++        configured higher timeframes, preserving the original 5 x 6 comparison matrix.
++        """
++        return [("ETH/USDT:USDT", tf) for tf in informative_timeframes_for(self.timeframe)]
++
++    def _artifact_dir(self) -> Path:
++        user_data = Path(str(self.config.get("user_data_dir", "user_data"))).resolve()
++        return user_data / "hprl_freqtrade_models" / self.MODEL_KEY / self.timeframe
++
++    def _native_configs(self, api, device: str):
++        spec = MODELS[self.MODEL_KEY]
++        action = api["HPRLActionConfig"](**ACTION_KWARGS)
++        costs = api["HPRLCostConfig"](**COST_KWARGS)
++        reward = api["HPRLRewardConfig"](**reward_kwargs(spec))
++        env = api["HPRLEnvironmentConfig"](
++            initial_equity=1000.0,
++            parallel_envs=1,
++            annualization_periods=PERIODS_PER_YEAR[self.timeframe],
++            cvar_alpha=0.05,
++            terminate_equity_ratio=0.20,
++            runtime_checks=False,
++            info_mode="full",
++            action=action,
++            costs=costs,
++            reward=reward,
++        )
++        train = api["HPRLTrainingConfig"](
++            algorithm=spec.algorithm,
++            seed=42,
++            device=device,
++            replay_device="same",
++            batch_size=spec.batch_size,
++            replay_capacity=spec.replay_capacity,
++            warmup_steps=spec.warmup_transitions,
++            gradient_steps=1,
++            gamma=spec.gamma,
++            tau=spec.tau,
++            learning_rate=spec.learning_rate,
++            hidden_dim=spec.hidden_dim,
++            hidden_depth=spec.hidden_depth,
++            gradient_clip_norm=spec.gradient_clip_norm,
++            mixed_precision=False,
++            compile_mode="off",
++            expected_updates=0,
++            metrics_interval=100,
++            tier_entropy_target_fraction=spec.tier_entropy_target_fraction,
++            runtime_checks=False,
++        )
++        memory = api["HPRLMemoryConfig"](
++            dataset_mode="auto",
++            dataset_window_steps=16_384,
++            dataset_gpu_fraction=0.20,
++            replay_gpu_fraction=0.30,
++            release_offline_source_after_tensorize=True,
++        )
++        return action, env, train, memory
++
++    @staticmethod
++    def _native_api():
++        from freqtrade.hedge.hprl.action_space import configure_agent_action_levels
++        from freqtrade.hedge.hprl.checkpoint import load_checkpoint
++        from freqtrade.hedge.hprl.config import (
++            HPRLActionConfig,
++            HPRLCostConfig,
++            HPRLEnvironmentConfig,
++            HPRLMemoryConfig,
++            HPRLRewardConfig,
++            HPRLTrainingConfig,
++        )
++        from freqtrade.hedge.hprl.contracts import PlannedExecutionIntent
++        from freqtrade.hedge.hprl.data import TensorMarketDataset
++        from freqtrade.hedge.hprl.env import VectorizedHedgeEnv
++        from freqtrade.hedge.hprl.registry import create_agent
++        from freqtrade.hedge.production.hprl_hedge_adapter import (
++            HprlHedgeAdapter,
++            HprlHedgeAdapterPolicy,
++            HprlTargetUnit,
++        )
++
++        return locals()
++
++    def _runtime_contract(self, feature_names: tuple[str, ...]) -> dict[str, object]:
++        import freqtrade
++
++        spec = MODELS[self.MODEL_KEY]
++        repo_root = Path(freqtrade.__file__).resolve().parent.parent
++        source_contract = source_contract_payload(suite_root=SUITE_ROOT, repo_root=repo_root)
++        inputs = input_timeframes_for(self.timeframe)
++        return runtime_contract_payload(
++            model_key=spec.key,
++            algorithm=spec.algorithm,
++            strategy_class=spec.strategy_class,
++            base_timeframe=self.timeframe,
++            input_timeframes=inputs,
++            feature_version=FEATURE_VERSION,
++            feature_names=feature_names,
++            alignment_contract=MTF_ALIGNMENT_CONTRACT,
++            action_config=ACTION_KWARGS,
++            cost_config=COST_KWARGS,
++            reward_config=reward_kwargs(spec),
++            model_spec=asdict(spec),
++            source_contract=source_contract,
++        )
++
++    @staticmethod
++    def _utc_close_timestamp(value: object, candle_seconds: int):
++        timestamp = Timestamp(value)
++        if timestamp.tzinfo is None:
++            timestamp = timestamp.tz_localize("UTC")
++        else:
++            timestamp = timestamp.tz_convert("UTC")
++        return timestamp.to_pydatetime() + timedelta(seconds=candle_seconds)
++
++    @staticmethod
++    def _exact_notional_from_tier(action_cfg, decoded, side_index: int) -> float:
++        # Never derive production ratios from float32 target_margin.  The codec already
++        # exposes the executed integer tier index, so map that index back to the configured
++        # decimal level and only then apply leverage.  This prevents a legal 12% -> 20%
++        # transition from becoming 0.08000000... and being rejected by Decimal risk checks.
++        index = int(decoded.executed_level_index[0, 0, side_index].detach().cpu().item())
++        levels = tuple(action_cfg.position_levels)
++        if not 0 <= index < len(levels):
++            raise RuntimeError(f"native HPRL codec returned invalid tier index: {index}")
++        margin = Decimal(str(levels[index]))
++        leverage = Decimal(str(action_cfg.leverage))
++        return float(margin * leverage)
++
++    def _load_artifact_contract(
++        self,
++        *,
++        artifact: Path,
++        feature_names: tuple[str, ...],
++    ) -> tuple[dict[str, object], dict[str, object], str, str]:
++        manifest_path = artifact / "artifact_manifest.json"
++        metadata_path = artifact / "metadata.json"
++        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
++        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
++        if manifest.get("schema") != ARTIFACT_MANIFEST_SCHEMA:
++            raise RuntimeError("HPRL artifact manifest schema is not supported")
++        if metadata.get("schema") != MODEL_METADATA_SCHEMA:
++            raise RuntimeError("HPRL model metadata schema is not supported")
++
++        spec = MODELS[self.MODEL_KEY]
++        identity = (
++            metadata.get("model"),
++            metadata.get("algorithm"),
++            metadata.get("strategy_class"),
++            metadata.get("timeframe"),
++            tuple(metadata.get("input_timeframes", ())),
++            metadata.get("pair"),
++        )
++        expected_identity = (
++            self.MODEL_KEY,
++            spec.algorithm,
++            spec.strategy_class,
++            self.timeframe,
++            input_timeframes_for(self.timeframe),
++            "ETH/USDT:USDT",
++        )
++        if identity != expected_identity:
++            raise RuntimeError(
++                f"HPRL artifact identity mismatch: expected={expected_identity}, actual={identity}"
++            )
++        if metadata.get("feature_version") != FEATURE_VERSION:
++            raise RuntimeError(
++                "HPRL feature contract mismatch: "
++                f"{metadata.get('feature_version')} != {FEATURE_VERSION}"
++            )
++        if tuple(metadata.get("feature_names", ())) != feature_names:
++            raise RuntimeError("HPRL metadata feature names do not match Strategy features")
++
++        runtime_contract_sha = canonical_sha256(self._runtime_contract(feature_names))
++        artifact_contract_sha = str(metadata.get("artifact_contract_sha256") or "")
++        if metadata.get("runtime_contract_sha256") != runtime_contract_sha:
++            raise RuntimeError("HPRL runtime contract changed; checkpoint retraining is required")
++        if manifest.get("runtime_contract_sha256") != runtime_contract_sha:
++            raise RuntimeError(
++                "HPRL artifact manifest runtime contract does not match current source"
++            )
++        if (
++            not artifact_contract_sha
++            or manifest.get("artifact_contract_sha256") != artifact_contract_sha
++        ):
++            raise RuntimeError("HPRL artifact contract hash is missing or inconsistent")
++
++        verify_manifest_files(artifact, manifest)
++        return metadata, manifest, runtime_contract_sha, artifact_contract_sha
++
++    def _generate_hprl_columns(
++        self, dataframe: DataFrame, pair: str, frames: dict[str, DataFrame]
++    ) -> DataFrame:
++        if self.MODEL_KEY not in MODELS:
++            raise RuntimeError(f"Unknown HPRL Strategy model key: {self.MODEL_KEY!r}")
++        if pair != "ETH/USDT:USDT":
++            raise RuntimeError(f"HPRL ETH Strategy received unsupported pair: {pair!r}")
++        if int(self.startup_candle_count) < SOURCE_WARMUP_CANDLES:
++            raise RuntimeError(
++                "HPRL MTF startup_candle_count is below the source warmup contract: "
++                f"{self.startup_candle_count} < {SOURCE_WARMUP_CANDLES}"
++            )
++
++        artifact = self._artifact_dir()
++        checkpoint = artifact / "checkpoint.pt"
++        checkpoint_sidecar = artifact / "checkpoint.pt.json"
++        scaler_path = artifact / "scaler.npz"
++        metadata_path = artifact / "metadata.json"
++        manifest_path = artifact / "artifact_manifest.json"
++        required = (checkpoint, checkpoint_sidecar, scaler_path, metadata_path, manifest_path)
++        missing = [str(path) for path in required if not path.is_file()]
++        if missing:
++            raise FileNotFoundError(
++                "Native HPRL model artifact set is incomplete; prepare/retrain the model first: "
++                + ", ".join(missing)
++            )
++
++        candle_seconds = timeframe_to_seconds(self.timeframe)
++        input_timeframes = input_timeframes_for(self.timeframe)
++        (
++            x_raw,
++            y,
++            available,
++            timestamps,
++            feature_names,
++            valid_positions,
++            alignment_diagnostics,
++        ) = inference_arrays_mtf(
++            frames,
++            base_timeframe=self.timeframe,
++            input_timeframes=input_timeframes,
++        )
++        if len(x_raw) < 2:
++            raise RuntimeError(
++                "Not enough causal HPRL feature rows in Freqtrade analyzed dataframe"
++            )
++
++        with np.load(scaler_path, allow_pickle=False) as scale:
++            mean = scale["mean"].astype(np.float32, copy=True)
++            std = scale["std"].astype(np.float32, copy=True)
++            saved_names = tuple(str(value) for value in scale["feature_names"].tolist())
++            scaler_runtime_sha = str(scale["runtime_contract_sha256"].item())
++            scaler_artifact_sha = str(scale["artifact_contract_sha256"].item())
++        if saved_names != feature_names:
++            raise RuntimeError("HPRL scaler and Strategy feature names are not identical")
++
++        metadata, _manifest, runtime_contract_sha, artifact_contract_sha = (
++            self._load_artifact_contract(artifact=artifact, feature_names=feature_names)
++        )
++        if (
++            scaler_runtime_sha != runtime_contract_sha
++            or scaler_artifact_sha != artifact_contract_sha
++        ):
++            raise RuntimeError(
++                "HPRL scaler contract hashes do not match the committed artifact set"
++            )
++        x = apply_scaler(x_raw, mean, std)
++
++        api = self._native_api()
++        import torch
++
++        zeros = np.zeros(len(x), dtype=np.float32)
++        dataset = api["TensorMarketDataset"](
++            features=torch.as_tensor(x[:, None, :], dtype=torch.float32),
++            forward_returns=torch.as_tensor(y[:, None], dtype=torch.float32),
++            funding_rates=torch.as_tensor(zeros[:, None], dtype=torch.float32),
++            available_notional=torch.as_tensor(available[:, None], dtype=torch.float32),
++            symbols=("ETHUSDT",),
++        ).validate()
++
++        device = os.environ.get("HPRL_STRATEGY_DEVICE", "cpu")
++        action_cfg, env_cfg, train_cfg, memory_cfg = self._native_configs(api, device)
++        env = api["VectorizedHedgeEnv"](
++            dataset, env_cfg, device=train_cfg.device, memory_config=memory_cfg
++        )
++        agent = api["create_agent"](
++            MODELS[self.MODEL_KEY].algorithm,
++            env.observation_dim,
++            env.action_dim,
++            train_cfg,
++            device=None,
++        )
++        api["configure_agent_action_levels"](agent, action_cfg.level_count)
++        loaded_meta = api["load_checkpoint"](
++            checkpoint, agent, map_location="agent", restore_rng=False
++        )
++        checkpoint_identity = (
++            loaded_meta.get("schema"),
++            loaded_meta.get("model"),
++            loaded_meta.get("algorithm"),
++            loaded_meta.get("strategy_class"),
++            loaded_meta.get("timeframe"),
++            tuple(loaded_meta.get("input_timeframes", ())),
++            loaded_meta.get("feature_version"),
++            loaded_meta.get("runtime_contract_sha256"),
++            loaded_meta.get("artifact_contract_sha256"),
++            loaded_meta.get("observation_dim"),
++            loaded_meta.get("action_dim"),
++        )
++        expected_checkpoint_identity = (
++            MODEL_METADATA_SCHEMA,
++            self.MODEL_KEY,
++            MODELS[self.MODEL_KEY].algorithm,
++            MODELS[self.MODEL_KEY].strategy_class,
++            self.timeframe,
++            input_timeframes,
++            FEATURE_VERSION,
++            runtime_contract_sha,
++            artifact_contract_sha,
++            env.observation_dim,
++            env.action_dim,
++        )
++        if checkpoint_identity != expected_checkpoint_identity:
++            env.close(aggressive=False)
++            raise RuntimeError(
++                "HPRL checkpoint embedded metadata does not match current Strategy contract: "
++                f"expected={expected_checkpoint_identity}, actual={checkpoint_identity}"
++            )
++        if (
++            metadata.get("observation_dim") != env.observation_dim
++            or metadata.get("action_dim") != env.action_dim
++        ):
++            env.close(aggressive=False)
++            raise RuntimeError(
++                "HPRL metadata observation/action dimensions do not match native env"
++            )
++
++        adapter_policy = api["HprlHedgeAdapterPolicy"].from_hprl_action_config(
++            action_cfg,
++            target_unit=api["HprlTargetUnit"].NOTIONAL_EQUITY_RATIO,
++        )
++        adapter = api["HprlHedgeAdapter"](adapter_policy)
++
++        row_count = len(dataframe)
++        long_score = np.zeros(row_count, dtype=np.float32)
++        short_score = np.zeros(row_count, dtype=np.float32)
++        target_net = np.full(row_count, np.nan, dtype=np.float64)
++        target_net_ratio = np.full(row_count, np.nan, dtype=np.float64)
++        confidence = np.ones(row_count, dtype=np.float32)
++        risk_scale = np.ones(row_count, dtype=np.float32)
++        long_scale = np.zeros(row_count, dtype=np.float32)
++        short_scale = np.zeros(row_count, dtype=np.float32)
++        allow_new_risk = np.zeros(row_count, dtype=bool)
++        regime = np.full(row_count, "HPRL", dtype=object)
++        reason = np.full(row_count, "HPRL_STARTUP", dtype=object)
++        model_version = np.full(row_count, self.version(), dtype=object)
++
++        # Freqtrade analyzes startup candles, then HEDGE trims exactly
++        # ``startup_candle_count`` rows before replay.  Reset the shadow account at the same
++        # boundary so the first formal HEDGE bar and the policy both start from flat equity.
++        formal_start_position = int(self.startup_candle_count)
++        start_decision = int(np.searchsorted(valid_positions, formal_start_position, side="left"))
++        if (
++            start_decision >= len(valid_positions)
++            or int(valid_positions[start_decision]) != formal_start_position
++        ):
++            env.close(aggressive=False)
++            raise RuntimeError(
++                "HPRL startup_candle_count does not cover the complete feature warmup at the "
++                f"formal replay boundary: startup={formal_start_position}, "
++                f"first_valid={int(valid_positions[0])}"
++            )
++        if start_decision >= env.market.time_steps - 1:
++            env.close(aggressive=False)
++            raise RuntimeError("HPRL formal replay has fewer than two realizable policy timesteps")
++
++        obs, _ = env.reset(start_index=start_decision)
++        previous_projection = None
++        model_id = (
++            f"hprl/{MODELS[self.MODEL_KEY].algorithm}/{self.timeframe}/"
++            + "+".join(input_timeframes)
++        )
++        shadow_autoresets = 0
++        try:
++            for decision_index in range(start_decision, env.market.time_steps):
++                # Decide first.  No realized forward return for this row has been consumed yet.
++                action = agent.act(obs, deterministic=True)
++                shaped = action
++                if tuple(action.shape) == (env.envs, env.action_dim):
++                    shaped = action.reshape(env.envs, env.symbols, 2)
++                if tuple(shaped.shape) != (env.envs, env.symbols, 2):
++                    raise RuntimeError(
++                        f"native HPRL agent returned invalid action shape: {tuple(action.shape)}"
++                    )
++                if env.tiered_codec is None:
++                    raise RuntimeError("Formal HPRL Strategy requires tiered action mode")
++                decoded = env.tiered_codec.decode(shaped, env.margin_position)
++                long_notional = self._exact_notional_from_tier(action_cfg, decoded, 0)
++                short_notional = self._exact_notional_from_tier(action_cfg, decoded, 1)
++
++                observed_at = self._utc_close_timestamp(
++                    timestamps[decision_index], candle_seconds
++                )
++                intent = api["PlannedExecutionIntent"](
++                    symbol=pair,
++                    target_long_exposure=long_notional,
++                    target_short_exposure=short_notional,
++                    confidence=1.0,
++                    model_id=model_id,
++                    metadata={
++                        "source": "freqtrade-strategy-native-hprl-mtf",
++                        "base_timeframe": self.timeframe,
++                        "input_timeframes": list(input_timeframes),
++                    },
++                )
++                projection = adapter.adapt(
++                    intent,
++                    sequence=decision_index - start_decision,
++                    observed_at=observed_at,
++                    now=observed_at,
++                    previous=previous_projection,
++                )
++                if not projection.accepted:
++                    raise RuntimeError(
++                        "native HPRL tier codec produced a target rejected by the production "
++                        f"adapter at row={decision_index}: {projection.reasons}"
++                    )
++                signal = adapter.signal_snapshot_kwargs(
++                    projection,
++                    timeframe=self.timeframe,
++                    candle_close_time=observed_at,
++                    feature_timestamp=observed_at,
++                )
++                row_position = int(valid_positions[decision_index])
++                long_score[row_position] = float(signal["long_score"])
++                short_score[row_position] = float(signal["short_score"])
++                confidence[row_position] = float(signal["confidence"])
++                risk_scale[row_position] = float(signal["risk_scale"])
++                long_scale[row_position] = float(signal["long_exposure_scale"])
++                short_scale[row_position] = float(signal["short_exposure_scale"])
++                allow_new_risk[row_position] = bool(signal["allow_new_risk"])
++                regime[row_position] = str(signal["regime"])
++                reason[row_position] = str(signal["reason"])
++                model_version[row_position] = str(signal["model_version"])
++                previous_projection = projection
++
++                if decision_index >= env.market.time_steps - 1:
++                    break
++
++                # Realize only after the target for this row is frozen.  A shadow-account
++                # termination must not terminate the formal HEDGE Strategy.  The native env
++                # autoresets terminated rows internally and returns the reset observation.
++                step = env.step(action)
++                if bool(step.terminated[0].item()):
++                    shadow_autoresets += 1
++                if bool(step.info.get("time_done", False)):
++                    break
++                obs = step.observation
++        finally:
++            env.close(aggressive=False)
++
++        # Assign columns in bulk.  Avoid a million DataFrame.at writes on 1m history and keep
++        # the exact canonical HEDGE surface explicit, including both nullable target fields.
++        dataframe["hedge_long_score"] = long_score
++        dataframe["hedge_short_score"] = short_score
++        dataframe["hedge_target_net"] = target_net
++        dataframe["hedge_target_net_ratio"] = target_net_ratio
++        dataframe["hedge_confidence"] = confidence
++        dataframe["hedge_risk_scale"] = risk_scale
++        dataframe["hedge_long_exposure_scale"] = long_scale
++        dataframe["hedge_short_exposure_scale"] = short_scale
++        dataframe["hedge_allow_new_risk"] = allow_new_risk
++        dataframe["hedge_regime"] = regime
++        dataframe["hedge_reason"] = reason
++        dataframe["hedge_model_version"] = model_version
++        # Keep the autoreset counter internal: extra full-history diagnostic columns would
++        # unnecessarily increase the 1m dataframe footprint.  The important semantic rule is
++        # that a shadow autoreset never terminates formal Strategy signal generation.
++        _ = (shadow_autoresets, alignment_diagnostics)
++        return dataframe
++
++    def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
++        pair = str(metadata.get("pair") or "ETH/USDT:USDT")
++        if pair != "ETH/USDT:USDT":
++            raise RuntimeError(f"HPRL ETH Strategy received unsupported pair: {pair!r}")
++        if getattr(self, "dp", None) is None:
++            raise RuntimeError("Freqtrade DataProvider is required for HPRL MTF Strategy")
++
++        frames: dict[str, DataFrame] = {self.timeframe: dataframe}
++        for timeframe in informative_timeframes_for(self.timeframe):
++            informative = self.dp.get_pair_dataframe(pair=pair, timeframe=timeframe)
++            if informative is None or informative.empty:
++                raise RuntimeError(
++                    f"Freqtrade DataProvider returned no informative OHLCV for {pair} {timeframe}"
++                )
++            frames[timeframe] = informative
++        return self._generate_hprl_columns(dataframe, pair, frames)
++
++    def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
++        del metadata
++        allowed = dataframe["hedge_allow_new_risk"].astype(bool)
++        dataframe["enter_long"] = (
++            (dataframe["hedge_long_exposure_scale"] > 0) & allowed
++        ).astype(int)
++        dataframe["enter_short"] = (
++            (dataframe["hedge_short_exposure_scale"] > 0) & allowed
++        ).astype(int)
++        return dataframe
++
++    def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
++        del metadata
++        dataframe["exit_long"] = 0
++        dataframe["exit_short"] = 0
++        return dataframe
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_rebrac_v2_eth.py /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_rebrac_v2_eth.py
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_rebrac_v2_eth.py	2026-08-20 11:15:56.000000000 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_rebrac_v2_eth.py	2026-08-20 12:09:08.731610311 +0000
+@@ -1,4 +1,4 @@
+-from hprl_base import HPRLNativeHedgeStrategyBase
++from hprl_mtf_v3_base import HPRLNativeHedgeStrategyBase
+ 
+ 
+ class HPRLReBRACv2ETHStrategy(HPRLNativeHedgeStrategyBase):
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_simba_sac_eth.py /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_simba_sac_eth.py
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_simba_sac_eth.py	2026-08-20 11:15:56.000000000 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_simba_sac_eth.py	2026-08-20 12:09:08.741457082 +0000
+@@ -1,4 +1,4 @@
+-from hprl_base import HPRLNativeHedgeStrategyBase
++from hprl_mtf_v3_base import HPRLNativeHedgeStrategyBase
+ 
+ 
+ class HPRLSimbaSACETHStrategy(HPRLNativeHedgeStrategyBase):
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_xqc_eth.py /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_xqc_eth.py
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/strategies/hprl_xqc_eth.py	2026-08-20 11:15:56.000000000 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/strategies/hprl_xqc_eth.py	2026-08-20 12:09:08.749280416 +0000
+@@ -1,4 +1,4 @@
+-from hprl_base import HPRLNativeHedgeStrategyBase
++from hprl_mtf_v3_base import HPRLNativeHedgeStrategyBase
+ 
+ 
+ class HPRLXQCETHStrategy(HPRLNativeHedgeStrategyBase):
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/suite_specs.py /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/suite_specs.py
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/suite_specs.py	2026-08-20 11:14:08.000000000 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/suite_specs.py	2026-08-20 12:14:48.605521852 +0000
+@@ -24,8 +24,7 @@
+     reward_overrides: Mapping[str, float] = field(default_factory=dict)
+ 
+ 
+-# Kept intentionally identical across all five algorithms so the model comparison
+-# is about the learner, not a different position/risk envelope.
++# All five algorithms deliberately share the same position/risk envelope.
+ ACTION_KWARGS = {
+     "mode": "tiered",
+     "position_levels": (0.0, 0.03, 0.07, 0.12, 0.20),
+@@ -67,6 +66,16 @@
+     "reward_clip": 5.0,
+ }
+ 
++# The order is semantic: each base timeframe consumes itself plus every timeframe to its right.
++TIMEFRAMES = ("1m", "5m", "15m", "1h", "8h", "1d")
++TIMEFRAME_SECONDS = {
++    "1m": 60,
++    "5m": 300,
++    "15m": 900,
++    "1h": 3600,
++    "8h": 28_800,
++    "1d": 86_400,
++}
+ PERIODS_PER_YEAR = {
+     "1m": 525_600,
+     "5m": 105_120,
+@@ -76,6 +85,10 @@
+     "1d": 365,
+ }
+ 
++# 96 candles covers the longest feature warmup (EMA55/rolling24) with margin and also tells
++# Freqtrade how much history to request for every informative timeframe.
++SOURCE_WARMUP_CANDLES = 96
++
+ TRAIN_STEPS = {
+     "fast": {
+         "1m": 1200, "5m": 1100, "15m": 1000, "1h": 900, "8h": 700, "1d": 600,
+@@ -97,7 +110,37 @@
+     "1d": 60,
+ }
+ 
+-TIMEFRAMES = tuple(PERIODS_PER_YEAR)
++# This contract is hashed into every checkpoint.  It intentionally describes the temporal
++# semantics, not just a list of columns, so an alignment change forces retraining.
++MTF_ALIGNMENT_CONTRACT = {
++    "decision_clock": "base_candle_close",
++    "informative_timestamp_semantics": "candle_open_time",
++    "informative_visibility": "source_open_plus_source_duration_le_base_close",
++    "join": "searchsorted_last_closed",
++    "closed_candle_only": True,
++    "forward_fill": "only_last_closed_within_one_source_period",
++    "stale_source_policy": "fail_closed",
++    "age_feature": "normalized_seconds_since_last_source_close",
++    "same_pair_only": True,
++    "missing_candle_policy": "freqtrade_no_action_fill_then_strict_contiguity",
++}
++
++
++def input_timeframes_for(base_timeframe: str) -> tuple[str, ...]:
++    try:
++        index = TIMEFRAMES.index(str(base_timeframe))
++    except ValueError as exc:
++        raise ValueError(f"unsupported HPRL base timeframe: {base_timeframe!r}") from exc
++    return TIMEFRAMES[index:]
++
++
++def informative_timeframes_for(base_timeframe: str) -> tuple[str, ...]:
++    return input_timeframes_for(base_timeframe)[1:]
++
++
++def timeframe_signature(base_timeframe: str) -> str:
++    return "__".join(input_timeframes_for(base_timeframe))
++
+ 
+ MODELS: dict[str, ModelSpec] = {
+     "fast_td3": ModelSpec(
+@@ -121,7 +164,9 @@
+         strategy_class="HPRLFastDSACETHStrategy",
+         strategy_file="hprl_fast_dsac_eth.py",
+         algorithm="fast_dsac",
+-        description="Distributional maximum-entropy SAC; balanced exploration and downside control.",
++        description=(
++            "Distributional maximum-entropy SAC; balanced exploration and downside control."
++        ),
+         learning_rate=3.0e-4,
+         hidden_dim=256,
+         hidden_depth=3,
+@@ -148,14 +193,22 @@
+         replay_capacity=100_000,
+         warmup_transitions=4096,
+         tier_entropy_target_fraction=0.55,
+-        reward_overrides={"drawdown": 0.52, "downside": 0.22, "cvar": 0.15, "gross_margin_risk": 0.11, "turnover": 0.0022},
++        reward_overrides={
++            "drawdown": 0.52,
++            "downside": 0.22,
++            "cvar": 0.15,
++            "gross_margin_risk": 0.11,
++            "turnover": 0.0022,
++        },
+     ),
+     "xqc": ModelSpec(
+         key="xqc",
+         strategy_class="HPRLXQCETHStrategy",
+         strategy_file="hprl_xqc_eth.py",
+         algorithm="xqc",
+-        description="XQC categorical critic with conditioning constraints; stability-oriented profile.",
++        description=(
++            "XQC categorical critic with conditioning constraints; stability-oriented profile."
++        ),
+         learning_rate=2.0e-4,
+         hidden_dim=320,
+         hidden_depth=3,
+@@ -165,7 +218,13 @@
+         replay_capacity=100_000,
+         warmup_transitions=4096,
+         tier_entropy_target_fraction=0.52,
+-        reward_overrides={"drawdown": 0.55, "downside": 0.25, "cvar": 0.18, "risk_projection": 0.10, "turnover": 0.0025},
++        reward_overrides={
++            "drawdown": 0.55,
++            "downside": 0.25,
++            "cvar": 0.18,
++            "risk_projection": 0.10,
++            "turnover": 0.0025,
++        },
+     ),
+     "rebrac_v2": ModelSpec(
+         key="rebrac_v2",
+@@ -181,7 +240,13 @@
+         batch_size=512,
+         replay_capacity=80_000,
+         warmup_transitions=4096,
+-        reward_overrides={"drawdown": 0.58, "downside": 0.26, "cvar": 0.18, "turnover": 0.0028, "hedge_overlap": 0.03},
++        reward_overrides={
++            "drawdown": 0.58,
++            "downside": 0.26,
++            "cvar": 0.18,
++            "turnover": 0.0028,
++            "hedge_overlap": 0.03,
++        },
+     ),
+ }
+ 
+diff -ruN '--exclude=PACKAGE_MANIFEST.json' '--exclude=V2_1_TO_V3_SOURCE.diff' '--exclude=__pycache__' /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/validate_suite.py /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/validate_suite.py
+--- /mnt/data/HPRL_FREQTRADE_BACKTEST_V2_1_SOURCE_REPAIRED/validate_suite.py	2026-08-20 11:44:50.114946960 +0000
++++ /mnt/data/HPRL_FREQTRADE_MTF_V3_SOURCE_REPAIRED/validate_suite.py	2026-08-20 12:14:48.605704006 +0000
+@@ -5,6 +5,9 @@
+ import json
+ from pathlib import Path
+ 
++from suite_specs import TIMEFRAMES, input_timeframes_for
++
++
+ HERE = Path(__file__).resolve().parent
+ EXPECTED = {
+     "fast_td3": "HPRLFastTD3ETHStrategy",
+@@ -13,7 +16,6 @@
+     "xqc": "HPRLXQCETHStrategy",
+     "rebrac_v2": "HPRLReBRACv2ETHStrategy",
+ }
+-TIMEFRAMES = ("1m", "5m", "15m", "1h", "8h", "1d")
+ 
+ 
+ def sha(path: Path) -> str:
+@@ -32,8 +34,12 @@
+         except Exception as exc:
+             errors.append(f"python:{path.relative_to(HERE)}:{type(exc).__name__}:{exc}")
+ 
+-    base = (HERE / "strategies" / "hprl_base.py").read_text(encoding="utf-8")
++    base = (HERE / "strategies" / "hprl_mtf_v3_base.py").read_text(encoding="utf-8")
+     required_tokens = (
++        "informative_pairs",
++        "get_pair_dataframe",
++        "inference_arrays_mtf",
++        "input_timeframes_for",
+         "create_agent",
+         "VectorizedHedgeEnv",
+         "load_checkpoint",
+@@ -55,23 +61,47 @@
+     if "HPRL_ETH_MULTI_TF" in base or "runner.py" in base:
+         errors.append("formal Strategy must not import or invoke the legacy runner")
+ 
++    feature_source = (HERE / "features.py").read_text(encoding="utf-8")
++    for token in (
++        "align_multi_timeframe_features",
++        "source_close_ns",
++        "decision_close_ns",
++        "searchsorted",
++        "age_frac",
++        "stale informative data",
++        "training_arrays_mtf",
++        "inference_arrays_mtf",
++    ):
++        if token not in feature_source:
++            errors.append(f"feature-contract-missing:{token}")
++
+     run_source = (HERE / "run_suite.py").read_text(encoding="utf-8")
+     if '"hedge-backtesting"' not in run_source:
+         errors.append("formal orchestrator does not invoke hedge-backtesting")
+     if "evaluate_agent" in run_source:
+         errors.append("formal orchestrator must not use custom HPRL evaluate_agent")
+     if "--data-format-ohlcv" not in run_source:
+-        errors.append("formal orchestrator does not preserve the prepared OHLCV data format")
++        errors.append("formal orchestrator does not preserve prepared OHLCV data format")
+ 
+     artifact_source = (HERE / "artifact_contract.py").read_text(encoding="utf-8")
+-    for token in ("source_contract_payload", "ARTIFACT_MANIFEST_SCHEMA", "MODEL_METADATA_SCHEMA"):
++    for token in (
++        "SOURCE_CONTRACT_SCHEMA",
++        "RUNTIME_CONTRACT_SCHEMA",
++        "input_timeframes",
++        "alignment_contract",
++        "freqtrade/data/dataprovider.py",
++        "freqtrade/strategy/interface.py",
++    ):
+         if token not in artifact_source:
+             errors.append(f"artifact-contract-missing:{token}")
+ 
+-    feature_source = (HERE / "features.py").read_text(encoding="utf-8")
+-    for token in ("FEATURE_VERSION", "refusing to compress or skip a market timestep", "expected_seconds"):
+-        if token not in feature_source:
+-            errors.append(f"feature-contract-missing:{token}")
++    for base_tf in TIMEFRAMES:
++        inputs = input_timeframes_for(base_tf)
++        if inputs[0] != base_tf:
++            errors.append(f"mtf-order:{base_tf}:{inputs}")
++        base_index = TIMEFRAMES.index(base_tf)
++        if inputs != TIMEFRAMES[base_index:]:
++            errors.append(f"mtf-surface:{base_tf}:{inputs}")
+ 
+     for model, strategy in EXPECTED.items():
+         config_path = HERE / "configs" / f"{model}.json"
+@@ -106,28 +136,49 @@
+     if len(matrix) != 30:
+         errors.append(f"matrix-size:{len(matrix)}")
+ 
++    for path in sorted(HERE.glob("*.ps1")):
++        raw = path.read_bytes()
++        try:
++            raw.decode("ascii")
++        except UnicodeDecodeError:
++            errors.append(f"powershell-not-ascii:{path.name}")
++
+     manifest_files = []
+     for path in sorted(HERE.rglob("*")):
+-        if path.is_file() and path.name != "PACKAGE_MANIFEST.json" and "__pycache__" not in path.parts:
++        if (
++            path.is_file()
++            and path.name != "PACKAGE_MANIFEST.json"
++            and "__pycache__" not in path.parts
++        ):
+             manifest_files.append({
+                 "path": path.relative_to(HERE).as_posix(),
+                 "size": path.stat().st_size,
+                 "sha256": sha(path),
+             })
++
+     payload = {
+-        "schema": "hprl-freqtrade-suite-validation-v2.1",
+-        "status": "PASS" if not errors else "FAIL",
++        "schema": "hprl-freqtrade-mtf-source-validation-v3",
++        "status": (
++            "SOURCE_STATIC_CHECK_OK_TESTS_DEFERRED"
++            if not errors
++            else "SOURCE_STATIC_CHECK_FAILED"
++        ),
+         "python_files_parsed": parsed,
+         "strategies": len(EXPECTED),
+-        "timeframes": len(TIMEFRAMES),
+-        "formal_backtest_tasks": len(matrix),
++        "base_timeframes": list(TIMEFRAMES),
++        "mtf_inputs": {tf: list(input_timeframes_for(tf)) for tf in TIMEFRAMES},
++        "formal_backtest_tasks_available_for_later": len(matrix),
++        "training_executed": False,
++        "backtests_executed": False,
++        "performance_test_executed": False,
+         "errors": errors,
+         "files": manifest_files,
+     }
+     (HERE / "PACKAGE_MANIFEST.json").write_text(
+         json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+     )
+-    print(json.dumps({k: v for k, v in payload.items() if k != "files"}, ensure_ascii=False, indent=2))
++    visible = {key: value for key, value in payload.items() if key != "files"}
++    print(json.dumps(visible, ensure_ascii=False, indent=2))
+     return 0 if not errors else 1
+ 
+ 
