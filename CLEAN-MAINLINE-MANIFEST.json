@@ -1,8 +1,8 @@
 {
   "schema": "freqtrade-hedge-clean-mainline-manifest-v1",
   "version": "freqtrade-hedge-clean-mainline-v1.7-risklevel-rl-dual-runtime-final-closure-risklevel-wf-2y-r4.7-hprl-v2.5.2-local-merge-20260816",
-  "file_count": 1790,
-  "total_bytes": 68800044,
+  "file_count": 1821,
+  "total_bytes": 69050090,
   "files": [
     {
       "path": ".coveragerc",
@@ -2410,6 +2410,11 @@
       "sha256": "b95ebf48e5cd91e4f5f7e3bfe1d6df82342e502f70b1e81a64d90a89e967c63f"
     },
     {
+      "path": "freqtrade/hedge/business_reconciliation.py",
+      "size": 17248,
+      "sha256": "95f2bab94e42a4e9a7e959c85fca50269357dc2cd5685f12212cdf8d768ac709"
+    },
+    {
       "path": "freqtrade/hedge/compatibility.py",
       "size": 2765,
       "sha256": "28a6663a70188d53318365583d8245ece97959faa128c58c76564fc084e67a8a"
@@ -2471,8 +2476,13 @@
     },
     {
       "path": "freqtrade/hedge/contracts/adapters.py",
-      "size": 6971,
-      "sha256": "10a148fa4078384ba737cf233eba119b1af6d9f02bd9c27db34e48c4224d5200"
+      "size": 10287,
+      "sha256": "38a716273db301f17cab82f8a6f01926bc105e5c4bf2ccac60f0968799cfa8e2"
+    },
+    {
+      "path": "freqtrade/hedge/contracts/business_identity.py",
+      "size": 6041,
+      "sha256": "d5c71d7a1028853918f41b065bddf42d11fbf5911f9a5a5734e5252805445b85"
     },
     {
       "path": "freqtrade/hedge/contracts/CHANGE_POLICY.md",
@@ -2486,8 +2496,8 @@
     },
     {
       "path": "freqtrade/hedge/contracts/events.py",
-      "size": 19739,
-      "sha256": "4c2e9378bc45bbc7976d14b4e18bba8deaccdc7de230b782e0a213f4a6dd4a19"
+      "size": 21475,
+      "sha256": "35c4e0c0a12d0ae79ada7db162650a24a3967173cea717d65438272d81af41c5"
     },
     {
       "path": "freqtrade/hedge/contracts/policy_target.py",
@@ -2506,8 +2516,8 @@
     },
     {
       "path": "freqtrade/hedge/contracts/types.py",
-      "size": 17120,
-      "sha256": "bc305a913320ba0405e0000c008294d12c1468771df595d3bc612b606c7cf9d8"
+      "size": 20224,
+      "sha256": "23901677860700590d51a9734511f43c3d5c541d571553c4f5f4f7637f507702"
     },
     {
       "path": "freqtrade/hedge/contracts/version.py",
@@ -2741,8 +2751,8 @@
     },
     {
       "path": "freqtrade/hedge/execution/integrated_fake.py",
-      "size": 5535,
-      "sha256": "0d7f24e720b415b57238a03eaedaa0b2c7e573579ed9771b253847a49be52b27"
+      "size": 5641,
+      "sha256": "45a3f0aa1cfbf196e3651147a0bd6537bd631741f9ef8361d076d27dff52744a"
     },
     {
       "path": "freqtrade/hedge/execution/kill_switch.py",
@@ -2756,8 +2766,8 @@
     },
     {
       "path": "freqtrade/hedge/execution/orchestrator.py",
-      "size": 15454,
-      "sha256": "79bcbcab42c5b5eb5191beba021989e1db54afd15b073bb403c0aa4eb752cb8f"
+      "size": 16225,
+      "sha256": "33e1655e6f92f133c73cb2e7c9e1c68dac47dbc0bd873d5e978ca110cda9daf0"
     },
     {
       "path": "freqtrade/hedge/execution/outbox_dispatcher.py",
@@ -2791,8 +2801,8 @@
     },
     {
       "path": "freqtrade/hedge/execution/service.py",
-      "size": 63705,
-      "sha256": "22cf1e601fe180fee34c64ca9abb4ce44b74cf9c595d6eea8f9960a0ad97596c"
+      "size": 65590,
+      "sha256": "a6efd41a96699d5cd11831aca3996b1fc3a75d0eab79de9c541e797dab910f06"
     },
     {
       "path": "freqtrade/hedge/execution/sql_audit.py",
@@ -3075,6 +3085,11 @@
       "sha256": "37c743668fb7ac2207c318ac345146b162b492548ab0aa9aeaaa7c24525429d7"
     },
     {
+      "path": "freqtrade/hedge/integration/business_identity.py",
+      "size": 8474,
+      "sha256": "c89368a7e807ff938cc49f903492e7fec630a9cd710dc6028b6bf293c112f8d1"
+    },
+    {
       "path": "freqtrade/hedge/integration/candle_cursor.py",
       "size": 1862,
       "sha256": "8082f4dd5e1e1a089866d4ea96fa3d60e1b9539989164e96a5df33a02e71cade"
@@ -3086,8 +3101,8 @@
     },
     {
       "path": "freqtrade/hedge/integration/composition.py",
-      "size": 20117,
-      "sha256": "93368f998ee17ec8658dccece429336f7ed59972a622fc63b19009301b20abb1"
+      "size": 20533,
+      "sha256": "5410ea8d082e65fa5ed8c9f3f80d4a0102c393f04691b6330bcf87f3d12a5d13"
     },
     {
       "path": "freqtrade/hedge/integration/controller.py",
@@ -3116,18 +3131,18 @@
     },
     {
       "path": "freqtrade/hedge/integration/paper_events.py",
-      "size": 23565,
-      "sha256": "62277db3b6a036a7f5e3e01ce470f9a5d0646321fef696b7d77e12ab349858ec"
+      "size": 25680,
+      "sha256": "cbf6086ed7753a85055aa1ae2d2dcd8b30fb4b765b0fca9ebf4a812d325773f9"
     },
     {
       "path": "freqtrade/hedge/integration/paper_matching.py",
-      "size": 12685,
-      "sha256": "7880718fd6c6c4649152e0821e2685dd1a5d39e7c5a61fb13918b1aaa4ab230e"
+      "size": 15297,
+      "sha256": "249c22b079dec2471f65fbccbcf9e6ad789e35c56304670aec18e322baceb3db"
     },
     {
       "path": "freqtrade/hedge/integration/paper_projection.py",
-      "size": 12407,
-      "sha256": "8445e34c0b465e2bfdf25c6610db8bca7b38816de7e01db30baac6435fbe2275"
+      "size": 19712,
+      "sha256": "2c9c8af1addee44c679cb8200ecdae95834a22c479628ae478d99e5d331eebfb"
     },
     {
       "path": "freqtrade/hedge/integration/paper_publisher.py",
@@ -3136,8 +3151,8 @@
     },
     {
       "path": "freqtrade/hedge/integration/paper_recovery.py",
-      "size": 9188,
-      "sha256": "31fd3f93e51e1c41b6e86de4ac5b154a6c9c90a14cca9c753ec0525c25544fda"
+      "size": 9742,
+      "sha256": "792e2b0143f738e831ba48f367bf3fc78e5bb15e2840b203a314570f540579d8"
     },
     {
       "path": "freqtrade/hedge/integration/paper_risk_gate.py",
@@ -3146,13 +3161,13 @@
     },
     {
       "path": "freqtrade/hedge/integration/paper_runtime.py",
-      "size": 45176,
-      "sha256": "cfbfd668852ae53c2f4b327145d1c8076248f14a05ffa143063757adae07bde3"
+      "size": 49041,
+      "sha256": "9ca178cf60d08d5789db56ffb7572dcf71be4189fcf360feff551fc38e9ad4ce"
     },
     {
       "path": "freqtrade/hedge/integration/paper_serialization.py",
-      "size": 19296,
-      "sha256": "e970217734c706dd33f97b0d06e2f137fae72812fe56bb83ab09945c0428de23"
+      "size": 23828,
+      "sha256": "c66fc43df160de04071c2dbea33811a6945dfb279326ca06d3093c83d8da0708"
     },
     {
       "path": "freqtrade/hedge/integration/paper_state.py",
@@ -3396,8 +3411,8 @@
     },
     {
       "path": "freqtrade/hedge/operations/dashboard.py",
-      "size": 3146,
-      "sha256": "a1a11aa4c0870f47c25644c15fcedcee88a1888e894a4df0093bdef5d0ebab14"
+      "size": 6552,
+      "sha256": "87b15fe583420203f308c626beb3fbde5d8e24e9d9fab866a0e867980d4a3040"
     },
     {
       "path": "freqtrade/hedge/operations/fills.py",
@@ -3431,8 +3446,8 @@
     },
     {
       "path": "freqtrade/hedge/operations/runtime.py",
-      "size": 10959,
-      "sha256": "92571360babc6cccc9d4008999bca82c242485ba1b3404bf62ebc7cc941dbc0a"
+      "size": 15445,
+      "sha256": "44b81d0e440805adde2ee69ebde53f8e37e0483ddc5a8635a1d292bd67b834f9"
     },
     {
       "path": "freqtrade/hedge/operations/session.py",
@@ -3596,13 +3611,13 @@
     },
     {
       "path": "freqtrade/hedge/planning/close_grid.py",
-      "size": 6838,
-      "sha256": "4a83c9444711d237535f93c939685ee32d36dd70629fdf9cc197c2e0926a1e15"
+      "size": 8457,
+      "sha256": "60a743545687de1587cd3d1c0a22a904109ec5c64a62c0413f6df04accf6cc5c"
     },
     {
       "path": "freqtrade/hedge/planning/context.py",
-      "size": 30282,
-      "sha256": "f65ce56adb17c4f4a7f00aaa62a079a76fdfe3459623220b199eac1f94a77c8f"
+      "size": 32642,
+      "sha256": "0d1ecd0113bb6ba8d8618bb577b176b4953d2d9541dda77f36ae380d565773b7"
     },
     {
       "path": "freqtrade/hedge/planning/core_tactical.py",
@@ -3611,13 +3626,13 @@
     },
     {
       "path": "freqtrade/hedge/planning/grid.py",
-      "size": 8504,
-      "sha256": "350b0984504e6ff887dc2b85b0c802a42a06015662bfd27315e7890215897fd0"
+      "size": 8733,
+      "sha256": "cba85ae7d41a71a361257431e83280875e3794c15ac6c860b4050f32bbc01337"
     },
     {
       "path": "freqtrade/hedge/planning/ideal_orders.py",
-      "size": 9899,
-      "sha256": "c94e9dcac969258b8d5614947650b99659049db642cc20b653f0145c86d50a9a"
+      "size": 10258,
+      "sha256": "035af779657e6827671fd1dc01234d9343763d8de30aee59aad2e0cf7377ce53"
     },
     {
       "path": "freqtrade/hedge/planning/target.py",
@@ -4015,6 +4030,26 @@
       "sha256": "ad0fe3c43c0d5e8fc1e62d6361131f764c9a1eb1798da68838782589172eac12"
     },
     {
+      "path": "freqtrade/hedge/protection/__init__.py",
+      "size": 1208,
+      "sha256": "f8d33f03def76c5ea3a22e347b973f77c6031b53268c2cd8ddd93adc8a4ab56d"
+    },
+    {
+      "path": "freqtrade/hedge/protection/contracts.py",
+      "size": 21951,
+      "sha256": "3981491e60c593f8c78548fb1169cfb77d053b468f0dbef23578656938fe9698"
+    },
+    {
+      "path": "freqtrade/hedge/protection/reconciliation.py",
+      "size": 8169,
+      "sha256": "264ded0f25a885acba11a68beb5ac2da21db1478e8e60a83ee94d8b651969bc2"
+    },
+    {
+      "path": "freqtrade/hedge/protection/service.py",
+      "size": 17649,
+      "sha256": "91068554f5b31da4eb0ade45d838939a4fc176ac7c93a29fffb940c4dbd977f7"
+    },
+    {
       "path": "freqtrade/hedge/readiness/__init__.py",
       "size": 718,
       "sha256": "81458d0ee3c5826cde47e5fa931a0c9fcdc742373a981ec00a5362e09cde1a46"
@@ -4361,8 +4396,8 @@
     },
     {
       "path": "freqtrade/hedge/simulation/cross_wallet.py",
-      "size": 41265,
-      "sha256": "6113557415d989a1ecdbfb48100b86298549174e687122d0435d2b0198a15a2d"
+      "size": 41752,
+      "sha256": "289fc8511be3650f87a5b475c3a7561730e4ab8eed43348a2c3f36f5aeec977e"
     },
     {
       "path": "freqtrade/hedge/simulation/exchange.py",
@@ -4755,29 +4790,59 @@
       "sha256": "5bbd53e0adde44c9f3363bcdf7170293c5840cd5e8d9b8e1949d372843a731a0"
     },
     {
+      "path": "freqtrade/persistence/hedge_business_identity.py",
+      "size": 11628,
+      "sha256": "618007a4669bc066fec5907266a6ab210d976745fddc387c8f4cf16b630b744a"
+    },
+    {
+      "path": "freqtrade/persistence/hedge_business_lot_projector.py",
+      "size": 4756,
+      "sha256": "78e18a217e51f8d702244425bf53c193112394a60fdccb647f971525f7dd16f4"
+    },
+    {
+      "path": "freqtrade/persistence/hedge_business_migrations.py",
+      "size": 16105,
+      "sha256": "c10543771db6874cf7dbfeee530a33a67d09b46110f75bc01f770420b7e65540"
+    },
+    {
+      "path": "freqtrade/persistence/hedge_business_reconciliation.py",
+      "size": 2339,
+      "sha256": "6f678fd78c8d8db398a42a541cf18a3ab2cad8b2d22927ecd5c3de9111ba31b0"
+    },
+    {
       "path": "freqtrade/persistence/hedge_contracts.py",
       "size": 4408,
       "sha256": "fc85dfd7adca722701c6c723c203e0df6b1343640cc78cdbfe6e18a2ccdc3c2d"
     },
     {
       "path": "freqtrade/persistence/hedge_execution_adapters.py",
-      "size": 46462,
-      "sha256": "85dedfca0fced83f305e7600b93ede4868e62afd50796380d562974c2f13177f"
+      "size": 50312,
+      "sha256": "3e1c8b4cc72b774a498bb49678bf9da482baf53a37d7cbb9cad9513741069861"
     },
     {
       "path": "freqtrade/persistence/hedge_migrations.py",
-      "size": 115928,
-      "sha256": "203666172ace8eff0fa9004dbe65e30bb6d4af220357aa404cc19b3039e675fd"
+      "size": 118395,
+      "sha256": "4e1ff9a5aa03ad64585a074c2be7429311ada01c3eb40b48fb445a416b731623"
     },
     {
       "path": "freqtrade/persistence/hedge_models.py",
-      "size": 57898,
-      "sha256": "869e2c468a2c29582826af993474fcd0b84baefcfe45725d9a9df97c459dcada"
+      "size": 65624,
+      "sha256": "0a00d9f1dbdee998205763e44728f5b9004384098cf6fa76e956eb484acd31e2"
     },
     {
       "path": "freqtrade/persistence/hedge_outbox.py",
       "size": 15560,
       "sha256": "f2b08c095a7ba392dfe8ef4ab846b4db749478e0f567c3cafafc8fa81b9a31c6"
+    },
+    {
+      "path": "freqtrade/persistence/hedge_protection.py",
+      "size": 13786,
+      "sha256": "3571309e4517aebd45b80f2d3fd699f51e21a82cd235a8f1fa8715ff7ecbd167"
+    },
+    {
+      "path": "freqtrade/persistence/hedge_protection_migrations.py",
+      "size": 7425,
+      "sha256": "aafd242d82f94825349de3c8298e99bb3a133178d685e9eb22d9fbe36d6e8e1b"
     },
     {
       "path": "freqtrade/persistence/hedge_reconciliation.py",
@@ -5146,8 +5211,8 @@
     },
     {
       "path": "freqtrade/rpc/api_server/hedge_readonly.py",
-      "size": 25427,
-      "sha256": "5fb099b96b3f8ca9c32037227903d8f5ccd44d242965f2a7757c5d910d70f8ff"
+      "size": 26744,
+      "sha256": "cf928e020680cc0618ac0ad99c233d34d5dba822f9c2bf8414ad29b44f4c1140"
     },
     {
       "path": "freqtrade/rpc/api_server/hedge_research.py",
@@ -5181,8 +5246,8 @@
     },
     {
       "path": "freqtrade/rpc/api_server/hedge_schemas.py",
-      "size": 23455,
-      "sha256": "10906cd7ea7b8e08afc4df2c56ca1dd28174eacbc88f9e5057c4fca4f0017870"
+      "size": 25671,
+      "sha256": "068480f89754d8cf85fc5c1f1e617c107d9811ec9a0bbbfe0ab11972293ecab9"
     },
     {
       "path": "freqtrade/rpc/api_server/hedge_ui/app.js",
@@ -6220,6 +6285,11 @@
       "sha256": "2e6e14d984862366e4dce6bdd8537f19f8869d6b0b19b6853f04ab0540c821c1"
     },
     {
+      "path": "tests/hedge/api/test_business_identity_read_model.py",
+      "size": 2109,
+      "sha256": "00e25af15d9bf81169f94ef643f64693aeedf3355f5b8b0ab4327b48253c55eb"
+    },
+    {
       "path": "tests/hedge/api/test_dashboard_strategy_targets.py",
       "size": 1463,
       "sha256": "1cbedd27a587947177c64cbb99d9afcd558fbce85a42fdd93e96272155a4d8cc"
@@ -6273,6 +6343,41 @@
       "path": "tests/hedge/backtesting/test_parity_reports.py",
       "size": 18781,
       "sha256": "7934630b1d7b79d540758d04992c8b83c715d95eae9d8230068434a17387e98c"
+    },
+    {
+      "path": "tests/hedge/business_identity/test_business_identity_adapter_transition.py",
+      "size": 1502,
+      "sha256": "f57209131c3ecfd8b10cff3216cedd125f71fe6ae21743d1f687ea6d37181ce9"
+    },
+    {
+      "path": "tests/hedge/business_identity/test_business_identity_class_contracts.py",
+      "size": 826,
+      "sha256": "4c96242d81eb2f3f7fb1209c4cb5170508daa0e4008c14fde4ebff7e5d0121bd"
+    },
+    {
+      "path": "tests/hedge/business_identity/test_business_identity_closure.py",
+      "size": 6041,
+      "sha256": "a3bb4a7986f6e351d57c2e7d11ce45909e451b0b4efa03f5c2d3d49c3a4b0363"
+    },
+    {
+      "path": "tests/hedge/business_identity/test_business_identity_contract.py",
+      "size": 2077,
+      "sha256": "5ffc35580390e02b972655d063a9a071a35583713ad2e50de290bb88bc9347fb"
+    },
+    {
+      "path": "tests/hedge/business_identity/test_business_identity_paper_lots.py",
+      "size": 1944,
+      "sha256": "90ada0ccbbd72582b01b6bb68ddf298df379caa0863bb8deee47e62d4bc56ea8"
+    },
+    {
+      "path": "tests/hedge/business_identity/test_business_identity_reconciliation.py",
+      "size": 4244,
+      "sha256": "03955c23d6a84a2d50b616e8e4fab032889cd4311e160146c5699226e6e354a4"
+    },
+    {
+      "path": "tests/hedge/business_identity/test_business_identity_sql_allocator.py",
+      "size": 1893,
+      "sha256": "bfcfe376972dc2a4a69d0c333668ef80b6d0335669c9d26b14d1684a931b4260"
     },
     {
       "path": "tests/hedge/concurrency/__init__.py",
@@ -6935,6 +7040,11 @@
       "sha256": "0575cfc4452f8a0a089521966254dab7ce8c29fde4795934aa73587ce3385917"
     },
     {
+      "path": "tests/hedge/operations/test_business_identity_operations.py",
+      "size": 2745,
+      "sha256": "8ff19d99ab6319fe18654d849fc0b52b4904f19b1defd5095d83ea961638354a"
+    },
+    {
       "path": "tests/hedge/operations/test_checkpoint.py",
       "size": 709,
       "sha256": "140a9e096f73536115c40804589b0c763377fadc65d0220898d03b13dc61b2b0"
@@ -7338,6 +7448,51 @@
       "path": "tests/hedge/production/test_unknown_reservations.py",
       "size": 1210,
       "sha256": "b87e178e5cd37133988c4d2f0f4942e4ce39b66a0acaa93f0c246d3cf9adc46e"
+    },
+    {
+      "path": "tests/hedge/protection/test_protection_api_projection.py",
+      "size": 2295,
+      "sha256": "b01f04eefbaf534dbf1bb7902c3ee3d4660bf31e60268fcdd262e9c5c12af1e7"
+    },
+    {
+      "path": "tests/hedge/protection/test_protection_contracts.py",
+      "size": 3030,
+      "sha256": "17b03337ff1bd46956a6dd4e8a441923004ea58e732d18b7cb992f3db2a957bc"
+    },
+    {
+      "path": "tests/hedge/protection/test_protection_execution_integration.py",
+      "size": 1721,
+      "sha256": "f7d5091d8022d506dc2c2c9622e8597f273aa53e76cdf42d8dd38f8cf856abbd"
+    },
+    {
+      "path": "tests/hedge/protection/test_protection_migration_registration.py",
+      "size": 503,
+      "sha256": "63dc00f915b88c064575bcbf52d3caa76cced5fd54379e297427daa5699a30a9"
+    },
+    {
+      "path": "tests/hedge/protection/test_protection_migrations.py",
+      "size": 4333,
+      "sha256": "3f1d794527eddbbc29da68220034f36b6bafd2aba42c50fd673584e42848eb96"
+    },
+    {
+      "path": "tests/hedge/protection/test_protection_operations.py",
+      "size": 2502,
+      "sha256": "00b77e818b96bb98f36a02ddb72b053ffb57a62e81c52b74c78fb83de6be7b8c"
+    },
+    {
+      "path": "tests/hedge/protection/test_protection_persistence.py",
+      "size": 4578,
+      "sha256": "194de6c6a68db9f3024bb6908aced888c60f2a9109ad17ab39c2aff0cfa77da9"
+    },
+    {
+      "path": "tests/hedge/protection/test_protection_reconciliation.py",
+      "size": 1384,
+      "sha256": "042a98e1456d1944ba8f7fdc3a5ff594f7f6914f6ecbbf226f8bee12eb7b7179"
+    },
+    {
+      "path": "tests/hedge/protection/test_protection_service.py",
+      "size": 6701,
+      "sha256": "d50fa98f52bec52d4d61c923139f6b016f83d3d05c3a1607e0850fcceba5304b"
     },
     {
       "path": "tests/hedge/readiness/__init__.py",

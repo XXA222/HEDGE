@@ -50,6 +50,9 @@ from freqtrade.hedge.execution.state_machine import (
     OrderLifecycle,
     OrderState,
 )
+from freqtrade.persistence.hedge_business_lot_projector import (
+    apply_fill_to_business_lot,
+)
 from freqtrade.persistence.hedge_models import (
     ActionGroupRow,
     AuditEvent,
@@ -57,6 +60,8 @@ from freqtrade.persistence.hedge_models import (
     ExecutionIdempotencyRow,
     ExecutionOrderStateRow,
     PositionSnapshot,
+    BusinessTradeRow,
+    PositionLotRow,
     canonical_decimal,
 )
 from freqtrade.persistence.hedge_models import (
@@ -383,6 +388,20 @@ class SqlExecutionLedger(InMemoryExecutionLedger):
                         status=getattr(lifecycle.status, "value", str(lifecycle.status)),
                         idempotency_key=str(intent.idempotency_key),
                         correlation_id=correlation_id,
+                        business_trade_id=(
+                            None
+                            if intent.business_trade_id is None
+                            else str(intent.business_trade_id)
+                        ),
+                        business_lot_id=(
+                            None
+                            if intent.business_lot_id is None
+                            else str(intent.business_lot_id)
+                        ),
+                        order_role=(
+                            None if intent.order_role is None else intent.order_role.value
+                        ),
+                        order_revision=int(intent.order_revision),
                         target_snapshot_json="{}",
                         approved_quantity=canonical_decimal(typed_order.approved_quantity),
                         reason_codes_json="[]",
@@ -413,6 +432,7 @@ class SqlExecutionLedger(InMemoryExecutionLedger):
                 existing_intent.approved_quantity = canonical_decimal(typed_order.approved_quantity)
 
             if fill is not None:
+                fill_created = False
                 key = fill.position_key
                 if key is None:
                     raise ValueError("execution FillEvent requires position_key")
@@ -427,6 +447,7 @@ class SqlExecutionLedger(InMemoryExecutionLedger):
                     )
                 )
                 if existing is None:
+                    fill_created = True
                     session.add(
                         FillEventRow(
                             exchange=key.exchange,
@@ -440,6 +461,19 @@ class SqlExecutionLedger(InMemoryExecutionLedger):
                             client_order_id=fill.client_order_id,
                             intent_id=str(intent.intent_id),
                             correlation_id=correlation_id,
+                            business_trade_id=(
+                                None
+                                if fill.business_trade_id is None
+                                else str(fill.business_trade_id)
+                            ),
+                            business_lot_id=(
+                                None
+                                if fill.business_lot_id is None
+                                else str(fill.business_lot_id)
+                            ),
+                            order_role=(
+                                None if fill.order_role is None else fill.order_role.value
+                            ),
                             side=fill.order_side.value,
                             action=fill.action.value,
                             quantity=canonical_decimal(fill.quantity),
@@ -466,6 +500,14 @@ class SqlExecutionLedger(InMemoryExecutionLedger):
                     )
                     if actual != expected:
                         raise ValueError("duplicate trade_id contains conflicting fill data")
+                if fill_created:
+                    apply_fill_to_business_lot(
+                        session,
+                        position_lot_model=PositionLotRow,
+                        business_trade_model=BusinessTradeRow,
+                        order=typed_order,
+                        fill=fill,
+                    )
 
             session.add(
                 AuditEvent(
@@ -626,6 +668,22 @@ def _metadata_from_json(raw: str) -> Mapping[str, Any]:
     return decoded
 
 
+def _business_trade_seq_for_row(row: ExecutionOrderStateRow) -> int:
+    metadata = _metadata_from_json(row.metadata_json)
+    raw = metadata.get("business_trade_seq")
+    if raw is None:
+        raise ValueError("execution row business_trade_id has no business_trade_seq evidence")
+    return int(raw)
+
+
+def _business_lot_index_for_row(row: ExecutionOrderStateRow) -> int:
+    metadata = _metadata_from_json(row.metadata_json)
+    raw = metadata.get("business_lot_index")
+    if raw is None:
+        raise ValueError("execution row business_lot_id has no business_lot_index evidence")
+    return int(raw)
+
+
 class SqlExecutionStore:
     """SQL-authoritative implementation of ``ExecutionStorePort``.
 
@@ -652,7 +710,25 @@ class SqlExecutionStore:
             limit_price=(None if row.limit_price is None else Decimal(row.limit_price)),
             reduce_only=bool(row.reduce_only),
             intent_id=UUID(row.intent_id),
-            action_group_id=(None if row.action_group_id is None else UUID(row.action_group_id)),
+            action_group_id=(
+                None if row.action_group_id is None else UUID(row.action_group_id)
+            ),
+            business_trade_id=(
+                None if row.business_trade_id is None else UUID(row.business_trade_id)
+            ),
+            business_lot_id=(
+                None if row.business_lot_id is None else UUID(row.business_lot_id)
+            ),
+            business_trade_seq=(
+                None
+                if row.business_trade_id is None
+                else _business_trade_seq_for_row(row)
+            ),
+            lot_index=(
+                None if row.business_lot_id is None else _business_lot_index_for_row(row)
+            ),
+            order_role=row.order_role,
+            order_revision=int(row.order_revision or 0),
             metadata=_metadata_from_json(row.metadata_json),
         )
         lifecycle = OrderLifecycle(
@@ -725,7 +801,20 @@ class SqlExecutionStore:
         row.action_group_id = (
             None if intent.action_group_id is None else str(intent.action_group_id)
         )
-        row.metadata_json = _metadata_json(intent.metadata)
+        row.business_trade_id = (
+            None if intent.business_trade_id is None else str(intent.business_trade_id)
+        )
+        row.business_lot_id = (
+            None if intent.business_lot_id is None else str(intent.business_lot_id)
+        )
+        row.order_role = None if intent.order_role is None else intent.order_role.value
+        row.order_revision = int(intent.order_revision)
+        metadata = dict(intent.metadata)
+        if intent.business_trade_seq is not None:
+            metadata["business_trade_seq"] = int(intent.business_trade_seq)
+        if intent.lot_index is not None:
+            metadata["business_lot_index"] = int(intent.lot_index)
+        row.metadata_json = _metadata_json(metadata)
         row.approved_quantity = canonical_decimal(order.approved_quantity)
         row.risk_reason_codes_json = json.dumps([], separators=(",", ":"))
         row.lifecycle_status = lifecycle.status.value

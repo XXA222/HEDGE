@@ -13,6 +13,7 @@ from typing import Any, Protocol, cast
 
 from sqlalchemy import select
 
+from freqtrade.hedge.contracts.business_identity import BusinessIdentity, BusinessOrderRole
 from freqtrade.hedge.simulation.exchange import (
     AccountEvent,
     AccountEventType,
@@ -27,6 +28,8 @@ from freqtrade.persistence.hedge_models import (
 )
 from freqtrade.persistence.hedge_models import (
     FillEvent as FillEventRow,
+    BusinessTradeRow,
+    PositionLotRow,
 )
 from freqtrade.persistence.hedge_service import HedgePersistenceService
 
@@ -68,6 +71,8 @@ class RecoveredPaperFill:
     fee_currency: str | None
     bucket: str
     event_time: datetime
+    business_identity: BusinessIdentity | None = None
+    order_role: BusinessOrderRole | None = None
 
     def __post_init__(self) -> None:
         trade_id = str(self.trade_id).strip()
@@ -145,6 +150,38 @@ class SqlPaperExecutionRecovery:
                 metadata_by_client[row.client_order_id] = (
                     value if isinstance(value, Mapping) else {}
                 )
+            business_by_lot: dict[str, BusinessIdentity] = {}
+            lot_rows = tuple(
+                session.scalars(
+                    select(PositionLotRow).where(
+                        PositionLotRow.account_id == self._account_id,
+                        PositionLotRow.symbol == self._symbol,
+                    )
+                )
+            )
+            trade_ids = {str(item.business_trade_id) for item in lot_rows}
+            trade_rows = tuple(
+                session.scalars(
+                    select(BusinessTradeRow).where(
+                        BusinessTradeRow.business_trade_id.in_(trade_ids)
+                    )
+                )
+            ) if trade_ids else ()
+            trades = {str(item.business_trade_id): item for item in trade_rows}
+            for lot in lot_rows:
+                trade = trades.get(str(lot.business_trade_id))
+                if trade is None:
+                    continue
+                identity = BusinessIdentity(
+                    business_trade_id=trade.business_trade_id,
+                    business_trade_seq=int(trade.business_trade_seq),
+                    business_lot_id=lot.business_lot_id,
+                    lot_index=int(lot.lot_index),
+                    account_id=lot.account_id,
+                    symbol=lot.symbol,
+                    position_side=lot.position_side,
+                )
+                business_by_lot[str(lot.business_lot_id)] = identity
             rows = tuple(
                 session.scalars(
                     select(FillEventRow)
@@ -185,6 +222,16 @@ class SqlPaperExecutionRecovery:
                     fee_currency=row.fee_currency,
                     bucket=str(bucket),
                     event_time=observed,
+                    business_identity=(
+                        None
+                        if row.business_lot_id is None
+                        else business_by_lot.get(str(row.business_lot_id))
+                    ),
+                    order_role=(
+                        None
+                        if row.order_role is None
+                        else BusinessOrderRole(str(row.order_role))
+                    ),
                 )
             )
         return tuple(recovered)

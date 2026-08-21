@@ -16,6 +16,10 @@ from decimal import Decimal
 from threading import RLock
 from typing import Any, cast
 
+from freqtrade.hedge.business_reconciliation import (
+    business_reconciliation_log_payload,
+    reconcile_business_state,
+)
 from freqtrade.hedge.contracts.ports import (
     EventPublisherPort,
     MarketRulesPort,
@@ -45,6 +49,7 @@ from freqtrade.hedge.execution.service import (
 from freqtrade.hedge.execution.service import (
     PositionSide as ExecutionSide,
 )
+from freqtrade.hedge.integration.business_identity import BusinessIdentityBinder
 from freqtrade.hedge.integration.candle_cursor import bar_fingerprint
 from freqtrade.hedge.integration.paper_events import (
     NullPaperAccountEventSink,
@@ -253,6 +258,7 @@ class IntegratedPaperHedgeApplication(
         self._new_risk_enabled_providers: list[Callable[[], bool]] = []
         self._order_admission_policy = CompositeAdmissionPolicy()
         self._intent_transformers: list[Callable[[object], object]] = []
+        self._business_identity_binder: BusinessIdentityBinder | None = None
         self._fill_observers: list[Callable[[object, object, object, object], None]] = []
         self.add_new_risk_provider(
             lambda: (
@@ -337,6 +343,7 @@ class IntegratedPaperHedgeApplication(
         store: ExecutionStorePort | None = None,
         idempotency: IdempotencyPort[ExecutionResult] | None = None,
         account_event_sink: PaperAccountEventSink | None = None,
+        business_identity_binder: BusinessIdentityBinder | None = None,
     ) -> None:
         """Bind the authoritative direction-three/direction-five graph exactly once."""
 
@@ -358,9 +365,11 @@ class IntegratedPaperHedgeApplication(
                 idempotency=idempotency,
                 fee_rate=self._paper_fee_rate,
                 strict_dependencies=True,
+                require_business_identity=business_identity_binder is not None,
             )
             if account_event_sink is not None:
                 self._account_event_sink = account_event_sink
+            self._business_identity_binder = business_identity_binder
             self._restore_state()
 
     def _execution(self) -> IntegratedFakeRuntime:
@@ -520,9 +529,17 @@ class IntegratedPaperHedgeApplication(
             bucket = PositionBucket(fill.bucket)
             bucket_state = self._bucket[PositionSide(fill.position_side)]
             if action in {ExecutionAction.OPEN, ExecutionAction.INCREASE}:
-                bucket_state.increase(bucket, fill.quantity, fill.price, fill.event_time)
+                bucket_state.increase(
+                    bucket,
+                    fill.quantity,
+                    fill.price,
+                    fill.event_time,
+                    business_identity=fill.business_identity,
+                )
             else:
-                bucket_state.reduce(bucket, fill.quantity)
+                bucket_state.reduce(
+                    bucket, fill.quantity, business_identity=fill.business_identity
+                )
             if callable(remember):
                 remember(
                     trade_id=fill.trade_id,
@@ -596,6 +613,7 @@ class IntegratedPaperHedgeApplication(
                         if state.tactical_opened_at is None
                         else state.tactical_opened_at.isoformat()
                     ),
+                    "business_lots": state.encode_business_lots(),
                 }
                 for side, state in self._bucket.items()
             },
@@ -762,6 +780,11 @@ class IntegratedPaperHedgeApplication(
                 )
                 planning = cast(PlanningResult, planning_result)
                 _blocked_new_risk += len(native_admission_blocks)
+                if self._business_identity_binder is not None:
+                    planning = self._business_identity_binder.bind_planning_result(
+                        planning,
+                        active_orders=wallet_before.active_orders,
+                    )
                 for planner_order_id in planning.cancel_order_ids:
                     client_id = self._planner_order_to_client.pop(planner_order_id, None)
                     if client_id is None:
@@ -777,6 +800,9 @@ class IntegratedPaperHedgeApplication(
                     exchange="paper",
                     strategy_id="pure-hedge-planner",
                     cycle_id=market.timestamp.isoformat(),
+                    require_business_identity=(
+                        self._business_identity_binder is not None
+                    ),
                 )
                 executions: list[ExecutionResult] = []
                 for planner_intent, execution_intent in zip(
@@ -836,11 +862,13 @@ class IntegratedPaperHedgeApplication(
                                     result.order.approved_quantity,
                                     fill_price,
                                     bar.timestamp,
+                                    business_identity=simulation_intent.business_identity,
                                 )
                             else:
                                 state.reduce(
                                     simulation_intent.bucket,
                                     result.order.approved_quantity,
+                                    business_identity=simulation_intent.business_identity,
                                 )
 
                 self.long_state = planning.long_state
@@ -862,6 +890,27 @@ class IntegratedPaperHedgeApplication(
                 self._last_market = market
                 self._last_bar = bar
                 wallet_after = cycle_result.wallet
+                business_reconciliation = None
+                if self._business_identity_binder is not None:
+                    business_reconciliation = reconcile_business_state(
+                        open_lots=(
+                            *wallet_after.long.position_lots,
+                            *wallet_after.short.position_lots,
+                        ),
+                        managed_orders=self._active_execution_orders(),
+                        remote_long_quantity=self._fake_leg(PositionSide.LONG).quantity,
+                        remote_short_quantity=self._fake_leg(PositionSide.SHORT).quantity,
+                        amount_tolerance=market.qty_step,
+                        account_id=self.account_id,
+                        symbol=self.symbol,
+                    )
+                    if not business_reconciliation.consistent:
+                        logger.error(
+                            "Paper business identity reconciliation drift",
+                            extra=business_reconciliation_log_payload(
+                                business_reconciliation
+                            ),
+                        )
                 realized = wallet_after.long.realized_pnl + wallet_after.short.realized_pnl
                 fees = (
                     self._fake_leg(PositionSide.LONG).fees + self._fake_leg(PositionSide.SHORT).fees
@@ -945,6 +994,29 @@ class IntegratedPaperHedgeApplication(
                                 ),
                                 api_healthy=self.dashboard_enabled,
                                 dashboard_healthy=self.dashboard_enabled,
+                                business_reconciliation_consistent=(
+                                    None
+                                    if business_reconciliation is None
+                                    else business_reconciliation.consistent
+                                ),
+                                managed_order_identity_coverage=(
+                                    None
+                                    if business_reconciliation is None
+                                    else (
+                                        business_reconciliation
+                                        .managed_order_identity_coverage
+                                    )
+                                ),
+                                business_trade_display_ids=(
+                                    ()
+                                    if business_reconciliation is None
+                                    else business_reconciliation.display_ids
+                                ),
+                                business_reconciliation_issues=(
+                                    ()
+                                    if business_reconciliation is None
+                                    else business_reconciliation.operation_details()
+                                ),
                             )
                         )
                         self.operations_error = None

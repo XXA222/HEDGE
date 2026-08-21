@@ -136,6 +136,10 @@ class OrderIntent(HedgeModelBase):
     strategy_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     decision_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     correlation_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    business_trade_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    business_lot_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    order_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    order_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     target_snapshot_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     approved_quantity: Mapped[str | None] = mapped_column(String(80), nullable=True)
     risk_snapshot_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -190,6 +194,9 @@ class OrderSnapshot(HedgeModelBase):
         String(36), ForeignKey("hedge_order_intents.intent_id"), nullable=True
     )
     correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    business_trade_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    business_lot_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    order_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
     side: Mapped[str] = mapped_column(String(8), nullable=False)
     action: Mapped[str | None] = mapped_column(String(32), nullable=True)
     order_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -264,6 +271,9 @@ class FillEvent(HedgeModelBase):
         String(36), ForeignKey("hedge_order_intents.intent_id"), nullable=True
     )
     correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    business_trade_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    business_lot_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    order_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
     side: Mapped[str] = mapped_column(String(8), nullable=False)
     action: Mapped[str | None] = mapped_column(String(32), nullable=True)
     quantity: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -637,6 +647,9 @@ class CurrentOrderProjection(HedgeModelBase):
     client_order_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     intent_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     action: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    business_trade_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    business_lot_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    order_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
     side: Mapped[str] = mapped_column(String(8), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     original_quantity: Mapped[str] = mapped_column(String(80), nullable=False, default="0")
@@ -758,6 +771,97 @@ class TacticalLot(HedgeModelBase):
     )
 
 
+
+class BusinessSequenceRow(HedgeModelBase):
+    __tablename__ = "hedge_business_sequences"
+    __table_args__ = (
+        UniqueConstraint("exchange", "account_id", name="uq_hedge_business_sequence_account"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    exchange: Mapped[str] = mapped_column(String(64), nullable=False)
+    account_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    next_trade_seq: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+
+class BusinessTradeRow(HedgeModelBase):
+    __tablename__ = "hedge_business_trades"
+    __table_args__ = (
+        UniqueConstraint("business_trade_id", name="uq_hedge_business_trade_id"),
+        UniqueConstraint(
+            "exchange", "account_id", "business_trade_seq",
+            name="uq_hedge_business_trade_account_seq",
+        ),
+        Index(
+            "ix_hedge_business_trade_open_side",
+            "account_id", "symbol", "position_side", "status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    business_trade_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    business_trade_seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    exchange: Mapped[str] = mapped_column(String(64), nullable=False)
+    account_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(128), nullable=False)
+    position_side: Mapped[str] = mapped_column(String(8), nullable=False)
+    strategy_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    origin_decision_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), nullable=False, default=utcnow
+    )
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    metadata_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    record_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
+class PositionLotRow(HedgeModelBase):
+    __tablename__ = "hedge_position_lots"
+    __table_args__ = (
+        UniqueConstraint("business_lot_id", name="uq_hedge_position_lot_id"),
+        UniqueConstraint(
+            "business_trade_id", "lot_index",
+            name="uq_hedge_position_lot_trade_index",
+        ),
+        Index(
+            "ix_hedge_position_lot_open_side",
+            "account_id", "symbol", "position_side", "status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    business_lot_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    business_trade_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("hedge_business_trades.business_trade_id"), nullable=False
+    )
+    lot_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    exchange: Mapped[str] = mapped_column(String(64), nullable=False)
+    account_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(128), nullable=False)
+    position_side: Mapped[str] = mapped_column(String(8), nullable=False)
+    bucket: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    original_quantity: Mapped[str] = mapped_column(String(80), nullable=False, default="0")
+    entry_filled_quantity: Mapped[str] = mapped_column(String(80), nullable=False, default="0")
+    open_quantity: Mapped[str] = mapped_column(String(80), nullable=False, default="0")
+    closed_quantity: Mapped[str] = mapped_column(String(80), nullable=False, default="0")
+    entry_quote: Mapped[str] = mapped_column(String(80), nullable=False, default="0")
+    average_entry_price: Mapped[str] = mapped_column(String(80), nullable=False, default="0")
+    realized_pnl: Mapped[str] = mapped_column(String(80), nullable=False, default="0")
+    fees: Mapped[str] = mapped_column(String(80), nullable=False, default="0")
+    funding: Mapped[str] = mapped_column(String(80), nullable=False, default="0")
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    metadata_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    record_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
 class ExecutionOrderStateRow(HedgeModelBase):
     """Authoritative current state for one execution order.
 
@@ -801,6 +905,10 @@ class ExecutionOrderStateRow(HedgeModelBase):
     reduce_only: Mapped[bool] = mapped_column(Boolean, nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     action_group_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    business_trade_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    business_lot_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    order_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    order_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     metadata_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     approved_quantity: Mapped[str] = mapped_column(String(80), nullable=False)
     risk_reason_codes_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
@@ -1189,6 +1297,9 @@ HEDGE_MODEL_CLASSES = (
     ExecutionIncomeEventRow,
     ControlOperationRow,
     AuditEvent,
+    BusinessSequenceRow,
+    BusinessTradeRow,
+    PositionLotRow,
     SchemaMigrationRecord,
 )
 

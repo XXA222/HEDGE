@@ -17,6 +17,7 @@ from types import MappingProxyType
 from typing import Any, Protocol, cast
 from uuid import UUID
 
+from freqtrade.hedge.contracts.business_identity import business_display_id
 from freqtrade.hedge.contracts.types import (
     ExecutionOrderIntent,
 )
@@ -376,6 +377,10 @@ class ExecutionOrder:
         created_at = _aware(self.created_at, field_name="created_at")
         object.__setattr__(self, "approved_quantity", approved)
         object.__setattr__(self, "created_at", created_at)
+
+    @property
+    def business_identity(self):
+        return self.intent.business_identity
 
     @property
     def leg_key(self) -> tuple[str, str, PositionSide]:
@@ -755,6 +760,7 @@ class ExecutionService:
         audit: AuditPort | None = None,
         metrics: ExecutionMetricsPort | None = None,
         runtime_lifecycle: ExecutionRuntimeLifecycle | None = None,
+        require_business_identity: bool = False,
     ) -> None:
         self._risk = risk
         self._exchange = exchange
@@ -765,11 +771,18 @@ class ExecutionService:
         self._audit = audit or NullAudit()
         self._metrics = metrics or NullMetrics()
         self._runtime_lifecycle = runtime_lifecycle or ExecutionRuntimeLifecycle()
+        if not isinstance(require_business_identity, bool):
+            raise TypeError("require_business_identity must be a boolean")
+        self._require_business_identity = require_business_identity
         self._leg_locks = tuple(RLock() for _ in range(self._LOCK_STRIPES))
 
     def submit(self, intent: OrderIntent) -> ExecutionResult:
         if not isinstance(intent, OrderIntent):
             raise TypeError("intent must be an OrderIntent")
+        if self._require_business_identity and intent.business_identity is None:
+            raise ExecutionBlockedError(
+                "managed execution intent has no durable business identity"
+            )
         with self.leg_guard(intent):
             return self._submit_locked(intent, intent_leg_key(intent))
 
@@ -1573,6 +1586,13 @@ class ExecutionService:
             left.limit_price,
             left.reduce_only,
             left.action_group_id,
+            left.business_trade_id,
+            left.business_trade_seq,
+            left.business_lot_id,
+            left.lot_index,
+            left.order_role,
+            left.order_revision,
+            left.submission_generation,
             left.metadata,
         ) == (
             right.account_id,
@@ -1584,6 +1604,13 @@ class ExecutionService:
             right.limit_price,
             right.reduce_only,
             right.action_group_id,
+            right.business_trade_id,
+            right.business_trade_seq,
+            right.business_lot_id,
+            right.lot_index,
+            right.order_role,
+            right.order_revision,
+            right.submission_generation,
             right.metadata,
         )
 
@@ -1598,6 +1625,25 @@ class ExecutionService:
             "client_order_id": order.client_order_id,
             "action_group_id": (
                 str(order.intent.action_group_id) if order.intent.action_group_id else None
+            ),
+            "business_trade_id": (
+                None
+                if order.intent.business_trade_id is None
+                else str(order.intent.business_trade_id)
+            ),
+            "business_trade_seq": order.intent.business_trade_seq,
+            "business_lot_id": (
+                None
+                if order.intent.business_lot_id is None
+                else str(order.intent.business_lot_id)
+            ),
+            "order_role": (
+                None if order.intent.order_role is None else order.intent.order_role.value
+            ),
+            "business_display_id": (
+                None
+                if order.intent.business_identity is None
+                else business_display_id(order.intent.business_identity)
             ),
             "account_id": order.intent.account_id,
             "symbol": order.intent.symbol,

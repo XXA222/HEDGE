@@ -37,9 +37,54 @@ class OperationsDashboardSnapshot:
     reconciliation_fresh: bool = False
     runtime_quality_level: int = 1
     runtime_quality_state: str = "RUNNING_UNVERIFIED"
+    business_reconciliation_consistent: bool | None = None
+    managed_order_identity_coverage: Decimal | None = None
+    business_trade_display_ids: tuple[str, ...] = ()
+    business_reconciliation_issues: tuple[str, ...] = ()
+    protection_reconciliation_consistent: bool | None = None
+    protection_coverage: Decimal | None = None
+    stop_coverage: Decimal | None = None
+    protection_reconciliation_issues: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         ensure_aware(self.generated_at)
+        coverage = self.managed_order_identity_coverage
+        if coverage is not None:
+            if not coverage.is_finite() or coverage < 0 or coverage > 1:
+                raise ValueError("managed order identity coverage must be within [0, 1]")
+        if len(self.business_trade_display_ids) != len(set(self.business_trade_display_ids)):
+            raise ValueError("business trade display ids must be unique")
+        if len(self.business_trade_display_ids) > 1000:
+            raise ValueError("too many business trade display ids")
+        if len(self.business_reconciliation_issues) > 100:
+            raise ValueError("too many business reconciliation issues")
+        for field_name in ("protection_coverage", "stop_coverage"):
+            value = getattr(self, field_name)
+            if value is not None and (
+                not value.is_finite() or value < 0 or value > 1
+            ):
+                raise ValueError(f"{field_name} must be within [0, 1]")
+        if len(self.protection_reconciliation_issues) > 100:
+            raise ValueError("too many protection reconciliation issues")
+
+    @property
+    def business_identity_ready(self) -> bool:
+        coverage = self.managed_order_identity_coverage
+        return (
+            self.business_reconciliation_consistent is not False
+            and (coverage is None or coverage == Decimal(1))
+        )
+
+    @property
+    def protection_ready(self) -> bool:
+        return (
+            self.protection_reconciliation_consistent is not False
+            and (
+                self.protection_coverage is None
+                or self.protection_coverage == Decimal(1)
+            )
+            and (self.stop_coverage is None or self.stop_coverage == Decimal(1))
+        )
 
     @property
     def ready(self) -> bool:
@@ -48,6 +93,8 @@ class OperationsDashboardSnapshot:
             and self.market_ready
             and self.warmup_ready
             and (self.risk is None or self.risk.ready)
+            and self.business_identity_ready
+            and self.protection_ready
             and self.new_risk_enabled
         )
 
@@ -81,4 +128,28 @@ class OperationsDashboardSnapshot:
             "reconciliation_fresh": self.reconciliation_fresh,
             "runtime_quality_level": self.runtime_quality_level,
             "runtime_quality_state": self.runtime_quality_state,
+            "business_reconciliation_consistent": (
+                self.business_reconciliation_consistent
+            ),
+            "managed_order_identity_coverage": (
+                None
+                if self.managed_order_identity_coverage is None
+                else str(self.managed_order_identity_coverage)
+            ),
+            "business_trade_display_ids": self.business_trade_display_ids,
+            "business_reconciliation_issues": self.business_reconciliation_issues,
+            "business_identity_ready": self.business_identity_ready,
+            "protection_reconciliation_consistent": (
+                self.protection_reconciliation_consistent
+            ),
+            "protection_coverage": (
+                None
+                if self.protection_coverage is None
+                else str(self.protection_coverage)
+            ),
+            "stop_coverage": (
+                None if self.stop_coverage is None else str(self.stop_coverage)
+            ),
+            "protection_reconciliation_issues": self.protection_reconciliation_issues,
+            "protection_ready": self.protection_ready,
         }

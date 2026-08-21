@@ -34,6 +34,7 @@ from freqtrade.hedge.contracts.ports import (
 from freqtrade.hedge.control.assembly import build_hedge_control_service
 from freqtrade.hedge.control.service import HedgeControlService
 from freqtrade.hedge.identity import RiskPositionKey
+from freqtrade.hedge.integration.business_identity import BusinessIdentityBinder
 from freqtrade.hedge.readiness.checks import ReadinessInputs
 from freqtrade.hedge.readiness.state import ReadinessState
 from freqtrade.hedge.risk.commit import SqlRiskApprovalCommitStore
@@ -42,6 +43,7 @@ from freqtrade.hedge.risk.runtime import HedgeRiskRuntime, build_hedge_risk_runt
 from freqtrade.hedge.runtime import HedgeRuntime
 from freqtrade.hedge.safety import assert_supported_operation_mode
 from freqtrade.hedge.symbols import raw_symbol
+from freqtrade.persistence.hedge_business_identity import SqlBusinessIdentityAllocator
 from freqtrade.persistence.hedge_execution_adapters import (
     SessionFactory,
     SqlActionGroupRepository,
@@ -402,6 +404,11 @@ def _build_paper_graph(
     action_groups = SqlActionGroupRepository(typed_session_factory)
     execution_ledger = SqlExecutionLedger(typed_session_factory)
     execution_store = SqlExecutionStore(typed_session_factory)
+    business_identity_binder = BusinessIdentityBinder(
+        allocator=SqlBusinessIdentityAllocator(typed_session_factory),
+        account_id=account_id,
+        exchange="paper",
+    )
     execution_idempotency = SqlExecutionIdempotencyStore(
         typed_session_factory,
         execution_store,
@@ -459,6 +466,7 @@ def _build_paper_graph(
         store=execution_store,
         idempotency=execution_idempotency,
         account_event_sink=account_event_sink,
+        business_identity_binder=business_identity_binder,
     )
     # H3 recovery is mandatory before the Paper graph is returned. JSON state is
     # an additional simulation checkpoint, never a replacement for the SQL fact store.

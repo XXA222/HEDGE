@@ -2773,6 +2773,62 @@ def _steps() -> tuple[MigrationStep, ...]:
             "Verify R5 budget lifecycle and income idempotency constraints",
             _step_verify_execution_authority_tables,
         ),
+        MigrationStep(
+            "H3-035-business-identity-schema",
+            "Create business identity tables and nullable propagation columns",
+            __import__(
+                "freqtrade.persistence.hedge_business_migrations",
+                fromlist=["step_business_identity_schema"],
+            ).step_business_identity_schema,
+        ),
+        MigrationStep(
+            "H3-036-business-identity-backfill",
+            "Deterministically backfill provable legacy business identities",
+            __import__(
+                "freqtrade.persistence.hedge_business_migrations",
+                fromlist=["step_business_identity_backfill"],
+            ).step_business_identity_backfill,
+        ),
+        MigrationStep(
+            "H3-037-business-identity-constraints",
+            "Create business identity uniqueness and lookup indexes",
+            __import__(
+                "freqtrade.persistence.hedge_business_migrations",
+                fromlist=["step_business_identity_constraints"],
+            ).step_business_identity_constraints,
+        ),
+        MigrationStep(
+            "H3-038-verify-business-identity",
+            "Verify active business identity coverage and ledger integrity",
+            __import__(
+                "freqtrade.persistence.hedge_business_migrations",
+                fromlist=["step_verify_business_identity"],
+            ).step_verify_business_identity,
+        ),
+        MigrationStep(
+            "H3-039-business-protection-schema",
+            "Create exact business-lot protection group and leg tables",
+            __import__(
+                "freqtrade.persistence.hedge_protection_migrations",
+                fromlist=["step_protection_schema"],
+            ).step_protection_schema,
+        ),
+        MigrationStep(
+            "H3-040-business-protection-constraints",
+            "Create active-lot protection uniqueness constraints",
+            __import__(
+                "freqtrade.persistence.hedge_protection_migrations",
+                fromlist=["step_protection_constraints"],
+            ).step_protection_constraints,
+        ),
+        MigrationStep(
+            "H3-041-verify-business-protection",
+            "Verify protection identity, stop coverage and execution state",
+            __import__(
+                "freqtrade.persistence.hedge_protection_migrations",
+                fromlist=["step_verify_protection"],
+            ).step_verify_protection,
+        ),
     )
 
 

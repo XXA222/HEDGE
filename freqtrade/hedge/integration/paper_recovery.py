@@ -68,6 +68,14 @@ class PaperRecoveryMixin:
                 if metadata.get("tactical_lot_id") is None
                 else str(metadata.get("tactical_lot_id"))
             ),
+            business_identity=order.intent.business_identity,
+            order_role=order.intent.order_role,
+            target_business_lot_id=(
+                order.intent.business_lot_id if order.intent.reduces_risk else None
+            ),
+            strategy_entry_key=str(metadata.get("strategy_entry_key", "")),
+            order_revision=int(order.intent.order_revision),
+            submission_generation=int(order.intent.submission_generation),
         )
 
     def _restore_authoritative_execution_orders(self: Any) -> bool:
@@ -148,7 +156,7 @@ class PaperRecoveryMixin:
             row = buckets.get(side.value, {})
             if not isinstance(row, Mapping):
                 raise TypeError("paper bucket row must be a mapping")
-            self._bucket[side] = _BucketState(
+            state = _BucketState(
                 core_quantity=Decimal(str(row.get("core_quantity", "0"))),
                 core_average=Decimal(str(row.get("core_average", "0"))),
                 core_opened_at=(
@@ -164,6 +172,8 @@ class PaperRecoveryMixin:
                     else datetime.fromisoformat(str(row["tactical_opened_at"]))
                 ),
             )
+            state.restore_business_lots(row.get("business_lots", ()))
+            self._bucket[side] = state
 
     def _restore_checkpoint(self: Any, payload: Mapping[str, Any]) -> None:
         self.long_state = self._decode_leg_state(payload.get("long_state"), PositionSide.LONG)

@@ -10,6 +10,10 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
+from freqtrade.hedge.contracts.business_identity import (
+    BusinessIdentity,
+    BusinessOrderRole,
+)
 from freqtrade.hedge.execution.service import (
     ApprovedOrderIntent,
     ExecutionOrder,
@@ -186,6 +190,11 @@ class PaperSerializationMixin:
         return {
             "intent_id": intent.intent_id,
             "symbol": intent.symbol,
+            "account_id": (
+                intent.business_identity.account_id
+                if intent.business_identity is not None
+                else "paper"
+            ),
             "position_side": intent.position_side.value,
             "order_side": intent.order_side.value,
             "action": intent.action.value,
@@ -198,6 +207,28 @@ class PaperSerializationMixin:
             "layer": intent.layer,
             "reason": intent.reason,
             "tactical_lot_id": intent.tactical_lot_id,
+            "business_trade_id": (
+                None
+                if intent.business_identity is None
+                else str(intent.business_identity.business_trade_id)
+            ),
+            "business_trade_seq": (
+                None
+                if intent.business_identity is None
+                else intent.business_identity.business_trade_seq
+            ),
+            "business_lot_id": (
+                None
+                if intent.business_identity is None
+                else str(intent.business_identity.business_lot_id)
+            ),
+            "lot_index": (
+                None if intent.business_identity is None else intent.business_identity.lot_index
+            ),
+            "order_role": None if intent.order_role is None else intent.order_role.value,
+            "strategy_entry_key": intent.strategy_entry_key,
+            "order_revision": intent.order_revision,
+            "submission_generation": intent.submission_generation,
         }
 
     @staticmethod
@@ -223,6 +254,27 @@ class PaperSerializationMixin:
                 if payload.get("tactical_lot_id") is None
                 else str(payload.get("tactical_lot_id"))
             ),
+            business_identity=(
+                None
+                if payload.get("business_trade_id") is None
+                else BusinessIdentity(
+                    business_trade_id=payload["business_trade_id"],
+                    business_trade_seq=int(payload["business_trade_seq"]),
+                    business_lot_id=payload["business_lot_id"],
+                    lot_index=int(payload.get("lot_index", 1)),
+                    account_id=str(payload.get("account_id", "paper")),
+                    symbol=str(payload["symbol"]),
+                    position_side=str(payload["position_side"]),
+                )
+            ),
+            order_role=(
+                None
+                if payload.get("order_role") is None
+                else BusinessOrderRole(str(payload["order_role"]))
+            ),
+            strategy_entry_key=str(payload.get("strategy_entry_key", "")),
+            order_revision=int(payload.get("order_revision", 0)),
+            submission_generation=int(payload.get("submission_generation", 0)),
         )
 
     def _encode_active_execution_orders(self: Any) -> list[dict[str, object]]:
@@ -256,8 +308,27 @@ class PaperSerializationMixin:
                         "reduce_only": intent.reduce_only,
                         "intent_id": str(intent.intent_id),
                         "action_group_id": (
-                            None if intent.action_group_id is None else str(intent.action_group_id)
+                            None
+                            if intent.action_group_id is None
+                            else str(intent.action_group_id)
                         ),
+                        "business_trade_id": (
+                            None
+                            if intent.business_trade_id is None
+                            else str(intent.business_trade_id)
+                        ),
+                        "business_trade_seq": intent.business_trade_seq,
+                        "business_lot_id": (
+                            None
+                            if intent.business_lot_id is None
+                            else str(intent.business_lot_id)
+                        ),
+                        "lot_index": intent.lot_index,
+                        "order_role": (
+                            None if intent.order_role is None else intent.order_role.value
+                        ),
+                        "order_revision": intent.order_revision,
+                        "submission_generation": intent.submission_generation,
                         "metadata": self._json_compatible(intent.metadata),
                     },
                     "lifecycle": {
@@ -333,6 +404,35 @@ class PaperSerializationMixin:
                     None
                     if intent_payload.get("action_group_id") is None
                     else UUID(str(intent_payload["action_group_id"]))
+                ),
+                business_trade_id=(
+                    None
+                    if intent_payload.get("business_trade_id") is None
+                    else UUID(str(intent_payload["business_trade_id"]))
+                ),
+                business_trade_seq=(
+                    None
+                    if intent_payload.get("business_trade_seq") is None
+                    else int(intent_payload["business_trade_seq"])
+                ),
+                business_lot_id=(
+                    None
+                    if intent_payload.get("business_lot_id") is None
+                    else UUID(str(intent_payload["business_lot_id"]))
+                ),
+                lot_index=(
+                    None
+                    if intent_payload.get("lot_index") is None
+                    else int(intent_payload["lot_index"])
+                ),
+                order_role=(
+                    None
+                    if intent_payload.get("order_role") is None
+                    else BusinessOrderRole(str(intent_payload["order_role"]))
+                ),
+                order_revision=int(intent_payload.get("order_revision", 0)),
+                submission_generation=int(
+                    intent_payload.get("submission_generation", 0)
                 ),
                 metadata=(
                     dict(intent_payload.get("metadata", {}))

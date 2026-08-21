@@ -75,6 +75,7 @@ def build_integrated_fake_runtime(
     idempotency: IdempotencyPort[ExecutionResult] | None = None,
     fee_rate: object = None,
     strict_dependencies: bool = False,
+    require_business_identity: bool = False,
 ) -> IntegratedFakeRuntime:
     from decimal import Decimal
 
@@ -116,6 +117,7 @@ def build_integrated_fake_runtime(
         kill_switch=kill_switch,
         audit=audit,
         metrics=metrics,
+        require_business_identity=require_business_identity,
     )
     ledger = (
         transaction

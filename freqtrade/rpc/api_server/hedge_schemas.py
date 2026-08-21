@@ -392,6 +392,19 @@ class ExecutionOrderSchema(HedgeSchema):
     client_order_id: str = Field(min_length=1, max_length=256)
     intent_id: str = Field(min_length=1, max_length=64)
     action_group_id: str | None = Field(default=None, max_length=64)
+    business_trade_id: str | None = Field(default=None, max_length=64)
+    business_lot_id: str | None = Field(default=None, max_length=64)
+    business_trade_seq: int | None = Field(default=None, ge=1)
+    lot_index: int | None = Field(default=None, ge=1)
+    order_role: str | None = Field(default=None, max_length=64)
+    business_display_id: str | None = Field(default=None, max_length=160)
+    order_revision: int = Field(default=0, ge=0)
+    protection_group_id: str | None = Field(default=None, max_length=64)
+    protection_id: str | None = Field(default=None, max_length=64)
+    protection_kind: (
+        Literal["TAKE_PROFIT", "STOP_LOSS", "TRAILING_STOP"] | None
+    ) = None
+    protection_label: str | None = Field(default=None, max_length=64)
     account_id: AccountId
     symbol: str = Field(min_length=1, max_length=64)
     position_side: Literal["LONG", "SHORT"]
@@ -444,6 +457,36 @@ class ExecutionOrderSchema(HedgeSchema):
             raise ValueError("filled quantity exceeds approved quantity")
         if self.remaining_quantity != self.approved_quantity - self.filled_quantity:
             raise ValueError("remaining quantity is inconsistent")
+        identity_fields = (
+            self.business_trade_id,
+            self.business_lot_id,
+            self.business_trade_seq,
+            self.lot_index,
+            self.order_role,
+        )
+        if any(value is not None for value in identity_fields) and not all(
+            value is not None for value in identity_fields
+        ):
+            raise ValueError("business identity projection must be complete")
+        if self.business_trade_id is not None and self.business_display_id is None:
+            raise ValueError("business identity projection requires display id")
+        if self.business_trade_id is None and self.business_display_id is not None:
+            raise ValueError("business display id requires business identity")
+        protection_fields = (
+            self.protection_group_id,
+            self.protection_id,
+            self.protection_kind,
+            self.protection_label,
+        )
+        if any(value is not None for value in protection_fields) and not all(
+            value is not None for value in protection_fields
+        ):
+            raise ValueError("protection order projection must be complete")
+        if self.protection_kind is not None:
+            if not self.reduce_only:
+                raise ValueError("protection execution must be reduce_only")
+            if self.order_role != self.protection_kind:
+                raise ValueError("protection kind must match business order role")
         return self
 
     @field_serializer(

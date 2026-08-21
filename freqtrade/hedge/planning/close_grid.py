@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from freqtrade.hedge.contracts.business_identity import BusinessOrderRole
+
 from .context import (
     ZERO,
     IntentAction,
@@ -103,10 +105,29 @@ def _lot_orders(
                 reason="tactical_lot_take_profit",
                 epoch=context.market.timestamp.isoformat(),
                 tactical_lot_id=lot.lot_id,
+                business_identity=lot.business_identity,
+                order_role=BusinessOrderRole.TAKE_PROFIT,
+                target_business_lot_id=(
+                    None
+                    if lot.business_identity is None
+                    else lot.business_identity.business_lot_id
+                ),
             )
         )
         created += qty
     return orders, created
+
+
+def _business_lot_orders(
+    context: PlanningContext,
+    side: PositionSide,
+    lots: tuple[TacticalLot, ...],
+    *,
+    bucket: PositionBucket,
+    budget: Decimal,
+) -> tuple[list[OrderIntent], Decimal]:
+    selected = tuple(lot for lot in lots if lot.bucket is bucket and lot.quantity > ZERO)
+    return _lot_orders(context, side, selected, budget)
 
 
 def _aggregate_orders(
@@ -168,6 +189,33 @@ def build_close_grid(
         return ()
 
     orders: list[OrderIntent] = []
+    business_lots = leg.position_lots
+    if business_lots:
+        tactical_budget = q_down(
+            min(budget, leg.tactical_quantity), context.market.qty_step
+        )
+        lot_orders, lot_created = _business_lot_orders(
+            context,
+            side,
+            business_lots,
+            bucket=PositionBucket.TACTICAL,
+            budget=tactical_budget,
+        )
+        orders.extend(lot_orders)
+        remaining_budget = q_down(
+            max(budget - lot_created, ZERO), context.market.qty_step
+        )
+        if remaining_budget > ZERO:
+            core_orders, _ = _business_lot_orders(
+                context,
+                side,
+                business_lots,
+                bucket=PositionBucket.CORE,
+                budget=remaining_budget,
+            )
+            orders.extend(core_orders)
+        return tuple(orders)
+
     tactical_budget = q_down(min(budget, leg.tactical_quantity), context.market.qty_step)
     lot_orders, lot_created = _lot_orders(
         context,

@@ -34,17 +34,18 @@ def _entry_price(context: PlanningContext, side: PositionSide, layer: int) -> De
     return q_up(raw, context.market.tick_size)
 
 
-def _tactical_lot_id(
+def _strategy_entry_key(
     context: PlanningContext,
     side: PositionSide,
+    bucket: PositionBucket,
     layer: int,
     price: Decimal,
 ) -> str:
     raw = (
-        f"{context.market.symbol}|{side.value}|{layer}|"
+        f"{context.market.symbol}|{side.value}|{bucket.value}|{layer}|"
         f"{context.market.timestamp.isoformat()}|{price}"
     ).encode()
-    return "lot-" + sha256(raw).hexdigest()[:24]
+    return "entry-" + sha256(raw).hexdigest()[:24]
 
 
 def _cap_order_quantity(
@@ -120,6 +121,10 @@ def _preserve_active_entries(
                 layer=layer,
                 reason="preserve_active_entry",
                 tactical_lot_id=active.tactical_lot_id,
+                business_identity=active.business_identity,
+                order_role=active.order_role,
+                order_revision=active.order_revision,
+                strategy_entry_key=active.strategy_entry_key,
             )
         )
         preserved_qty += desired_qty
@@ -226,10 +231,9 @@ def build_entry_grid(  # noqa: C901 - deterministic grid construction boundary
                     layer=layer,
                     reason=reason,
                     epoch=context.market.timestamp.isoformat(),
-                    tactical_lot_id=(
-                        _tactical_lot_id(context, side, layer, price)
-                        if bucket is PositionBucket.TACTICAL
-                        else None
+                    tactical_lot_id=None,
+                    strategy_entry_key=_strategy_entry_key(
+                        context, side, bucket, layer, price
                     ),
                 )
             )

@@ -108,12 +108,40 @@ class HedgeExecutionReadonlyQueryPort(Protocol):
 
 
 def _execution_order_schema(order: ExecutionOrder) -> ExecutionOrderSchema:
+    identity = order.intent.business_identity
+    role = order.intent.order_role
+    metadata = order.intent.metadata
+    protection_group_id = metadata.get("protection_group_id")
+    protection_id = metadata.get("protection_id")
+    protection_kind = metadata.get("protection_kind")
+    protection_label = metadata.get("protection_label")
     return ExecutionOrderSchema(
         client_order_id=order.client_order_id,
         intent_id=str(order.intent.intent_id),
         action_group_id=(
-            str(order.intent.action_group_id) if order.intent.action_group_id is not None else None
+            str(order.intent.action_group_id)
+            if order.intent.action_group_id is not None
+            else None
         ),
+        business_trade_id=(
+            None if identity is None else str(identity.business_trade_id)
+        ),
+        business_lot_id=(
+            None if identity is None else str(identity.business_lot_id)
+        ),
+        business_trade_seq=(
+            None if identity is None else identity.business_trade_seq
+        ),
+        lot_index=None if identity is None else identity.lot_index,
+        order_role=None if role is None else role.value,
+        business_display_id=None if identity is None else identity.display_id,
+        order_revision=order.intent.order_revision,
+        protection_group_id=(
+            None if protection_group_id is None else str(protection_group_id)
+        ),
+        protection_id=None if protection_id is None else str(protection_id),
+        protection_kind=None if protection_kind is None else str(protection_kind),
+        protection_label=None if protection_label is None else str(protection_label),
         account_id=order.intent.account_id,
         symbol=order.intent.symbol,
         position_side=order.intent.position_side.value,

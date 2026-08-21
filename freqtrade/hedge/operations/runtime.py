@@ -49,6 +49,44 @@ class OperationsCycleInput:
     reconciliation_fresh: bool = False
     api_healthy: bool = False
     dashboard_healthy: bool = False
+    business_reconciliation_consistent: bool | None = None
+    managed_order_identity_coverage: Decimal | None = None
+    business_trade_display_ids: tuple[str, ...] = ()
+    business_reconciliation_issues: tuple[str, ...] = ()
+    protection_reconciliation_consistent: bool | None = None
+    protection_coverage: Decimal | None = None
+    stop_coverage: Decimal | None = None
+    protection_reconciliation_issues: tuple[str, ...] = ()
+
+
+def _business_identity_ready(item: OperationsCycleInput) -> bool:
+    coverage = item.managed_order_identity_coverage
+    if coverage is not None:
+        if not isinstance(coverage, Decimal):
+            coverage = Decimal(str(coverage))
+        if not coverage.is_finite() or coverage < 0 or coverage > 1:
+            raise ValueError("managed order identity coverage must be within [0, 1]")
+    return (
+        item.business_reconciliation_consistent is not False
+        and (coverage is None or coverage == Decimal(1))
+    )
+
+
+def _business_protection_ready(item: OperationsCycleInput) -> bool:
+    values: list[Decimal | None] = []
+    for field_name in ("protection_coverage", "stop_coverage"):
+        value = getattr(item, field_name)
+        if value is not None and not isinstance(value, Decimal):
+            value = Decimal(str(value))
+        if value is not None and (not value.is_finite() or value < 0 or value > 1):
+            raise ValueError(f"{field_name} must be within [0, 1]")
+        values.append(value)
+    protection_coverage, stop_coverage = values
+    return (
+        item.protection_reconciliation_consistent is not False
+        and (protection_coverage is None or protection_coverage == Decimal(1))
+        and (stop_coverage is None or stop_coverage == Decimal(1))
+    )
 
 
 class DryRunOperationsRuntime:
@@ -168,11 +206,17 @@ class DryRunOperationsRuntime:
             equity_change=item.equity - item.initial_equity,
         )
 
+        business_identity_ready = _business_identity_ready(item)
+        business_protection_ready = _business_protection_ready(item)
+        business_diagnostics = list(item.business_reconciliation_issues)
+        protection_diagnostics = list(item.protection_reconciliation_issues)
         diagnostics = (
             list(self.recovery_reasons)
             + list(market.reasons)
             + list(warmup.missing)
             + list(risk.reasons)
+            + business_diagnostics
+            + protection_diagnostics
         )
         if not market.ready:
             self.alerts.emit(
@@ -188,12 +232,35 @@ class DryRunOperationsRuntime:
                 message=",".join(risk.reasons),
                 at=timestamp,
             )
+        if not business_identity_ready:
+            self.alerts.emit(
+                key="BUSINESS_IDENTITY_DRIFT",
+                severity=AlertSeverity.CRITICAL,
+                message=(
+                    ",".join(item.business_reconciliation_issues)
+                    or "business identity reconciliation failed"
+                ),
+                at=timestamp,
+            )
+
+        if not business_protection_ready:
+            self.alerts.emit(
+                key="BUSINESS_LOT_PROTECTION_DRIFT",
+                severity=AlertSeverity.CRITICAL,
+                message=(
+                    ",".join(item.protection_reconciliation_issues)
+                    or "business lot protection reconciliation failed"
+                ),
+                at=timestamp,
+            )
 
         new_risk_enabled = (
             not self.recovery_reasons
             and market.ready
             and warmup.ready
             and risk.ready
+            and business_identity_ready
+            and business_protection_ready
             and breaker.new_risk_enabled
         )
         self.total_orders += max(0, int(item.order_count))
@@ -223,6 +290,32 @@ class DryRunOperationsRuntime:
             reconciliation_fresh=bool(item.reconciliation_fresh),
             runtime_quality_level=quality_level,
             runtime_quality_state=quality_state,
+            business_reconciliation_consistent=(
+                item.business_reconciliation_consistent
+            ),
+            managed_order_identity_coverage=(
+                item.managed_order_identity_coverage
+            ),
+            business_trade_display_ids=item.business_trade_display_ids,
+            business_reconciliation_issues=(
+                item.business_reconciliation_issues
+            ),
+            protection_reconciliation_consistent=(
+                item.protection_reconciliation_consistent
+            ),
+            protection_coverage=(
+                None
+                if item.protection_coverage is None
+                else Decimal(str(item.protection_coverage))
+            ),
+            stop_coverage=(
+                None
+                if item.stop_coverage is None
+                else Decimal(str(item.stop_coverage))
+            ),
+            protection_reconciliation_issues=(
+                item.protection_reconciliation_issues
+            ),
         )
         self.latest = snapshot
         if self.state_store is not None:
@@ -250,7 +343,12 @@ class DryRunOperationsRuntime:
             level, state = 4, "FUNCTION_UNVERIFIED"
         if market_ready and warmup_ready and self.total_orders > 0 and self.total_fills > 0:
             level, state = 5, "LEDGER_UNVERIFIED"
-        if level >= 5 and item.reconciliation_fresh:
+        if (
+            level >= 5
+            and item.reconciliation_fresh
+            and _business_identity_ready(item)
+            and _business_protection_ready(item)
+        ):
             level, state = 6, "UI_UNVERIFIED"
         if level >= 6 and item.api_healthy and item.dashboard_healthy:
             level, state = 7, "CREDIBLE"
@@ -290,6 +388,16 @@ class DryRunOperationsRuntime:
                 "RISK_READY",
                 bool(latest and latest.risk and latest.risk.ready),
                 "RISK_NOT_READY",
+            ),
+            check(
+                "BUSINESS_IDENTITY_RECONCILIATION",
+                bool(latest and latest.business_identity_ready),
+                "BUSINESS_IDENTITY_DRIFT",
+            ),
+            check(
+                "BUSINESS_LOT_PROTECTION",
+                bool(latest and latest.protection_ready),
+                "BUSINESS_LOT_PROTECTION_DRIFT",
             ),
             ReadinessCheck("MAINNET_WRITES_LOCKED", True, ""),
         )

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
 from freqtrade.enums.hedge import PositionAction as RiskAction
 from freqtrade.enums.hedge import PositionSide as RiskPositionSide
+from freqtrade.hedge.contracts.business_identity import BusinessIdentity
 from freqtrade.hedge.execution.service import PositionSide as ExecutionSide
 from freqtrade.hedge.numeric import ZERO
 from freqtrade.hedge.planning.context import (
@@ -19,6 +20,7 @@ from freqtrade.hedge.planning.context import (
     OrderSide,
     PositionBucket,
     PositionSide,
+    TacticalLot,
     WalletSnapshot,
 )
 from freqtrade.hedge.risk.models import PendingOrderRisk
@@ -33,8 +35,17 @@ ONE = Decimal(1)
 
 
 @dataclass(slots=True)
+class _BusinessLotState:
+    identity: BusinessIdentity
+    bucket: PositionBucket
+    quantity: Decimal
+    average_price: Decimal
+    opened_at: datetime
+
+
+@dataclass(slots=True)
 class _BucketState:
-    """Mutable core/tactical quantities maintained beside execution facts."""
+    """Core/tactical aggregate cache plus exact business-lot ownership."""
 
     core_quantity: Decimal = ZERO
     core_average: Decimal = ZERO
@@ -42,6 +53,42 @@ class _BucketState:
     tactical_quantity: Decimal = ZERO
     tactical_average: Decimal = ZERO
     tactical_opened_at: datetime | None = None
+    business_lots: dict[str, _BusinessLotState] = field(default_factory=dict)
+
+    @staticmethod
+    def _aware(value: datetime | None) -> datetime:
+        observed = datetime.now(UTC) if value is None else value
+        if observed.tzinfo is None:
+            return observed.replace(tzinfo=UTC)
+        return observed.astimezone(UTC)
+
+    def _recompute(self) -> None:
+        core = [item for item in self.business_lots.values() if item.bucket is PositionBucket.CORE]
+        tactical = [
+            item for item in self.business_lots.values() if item.bucket is PositionBucket.TACTICAL
+        ]
+        if core:
+            self.core_quantity = sum((item.quantity for item in core), ZERO)
+            self.core_average = (
+                sum((item.quantity * item.average_price for item in core), ZERO)
+                / self.core_quantity
+            )
+            self.core_opened_at = min(item.opened_at for item in core)
+        elif self.business_lots:
+            self.core_quantity = ZERO
+            self.core_average = ZERO
+            self.core_opened_at = None
+        if tactical:
+            self.tactical_quantity = sum((item.quantity for item in tactical), ZERO)
+            self.tactical_average = (
+                sum((item.quantity * item.average_price for item in tactical), ZERO)
+                / self.tactical_quantity
+            )
+            self.tactical_opened_at = min(item.opened_at for item in tactical)
+        elif self.business_lots:
+            self.tactical_quantity = ZERO
+            self.tactical_average = ZERO
+            self.tactical_opened_at = None
 
     def increase(
         self,
@@ -49,17 +96,38 @@ class _BucketState:
         quantity: Decimal,
         price: Decimal,
         opened_at: datetime | None = None,
+        *,
+        business_identity: BusinessIdentity | None = None,
     ) -> None:
-        opened_at = datetime.now(UTC) if opened_at is None else opened_at
-        if opened_at.tzinfo is None:
-            opened_at = opened_at.replace(tzinfo=UTC)
-        else:
-            opened_at = opened_at.astimezone(UTC)
+        observed = self._aware(opened_at)
+        if business_identity is not None:
+            key = str(business_identity.business_lot_id)
+            current = self.business_lots.get(key)
+            if current is None:
+                self.business_lots[key] = _BusinessLotState(
+                    identity=business_identity,
+                    bucket=bucket,
+                    quantity=quantity,
+                    average_price=price,
+                    opened_at=observed,
+                )
+            else:
+                if current.identity != business_identity or current.bucket is not bucket:
+                    raise ValueError("business lot identity/bucket changed during fill projection")
+                total = current.quantity + quantity
+                current.average_price = (
+                    current.quantity * current.average_price + quantity * price
+                ) / total
+                current.quantity = total
+            self._recompute()
+            return
+
+        # Legacy checkpoint compatibility. New managed execution always supplies identity.
         if bucket is PositionBucket.CORE:
             total = self.core_quantity + quantity
             self.core_average = (self.core_quantity * self.core_average + quantity * price) / total
             if self.core_quantity == ZERO:
-                self.core_opened_at = opened_at
+                self.core_opened_at = observed
             self.core_quantity = total
         else:
             total = self.tactical_quantity + quantity
@@ -67,10 +135,30 @@ class _BucketState:
                 self.tactical_quantity * self.tactical_average + quantity * price
             ) / total
             if self.tactical_quantity == ZERO:
-                self.tactical_opened_at = opened_at
+                self.tactical_opened_at = observed
             self.tactical_quantity = total
 
-    def reduce(self, bucket: PositionBucket, quantity: Decimal) -> None:
+    def reduce(
+        self,
+        bucket: PositionBucket,
+        quantity: Decimal,
+        *,
+        business_identity: BusinessIdentity | None = None,
+    ) -> None:
+        if business_identity is not None:
+            key = str(business_identity.business_lot_id)
+            current = self.business_lots.get(key)
+            if current is None or current.bucket is not bucket:
+                raise ValueError("target business lot is not open in the Paper projection")
+            if quantity > current.quantity:
+                raise ValueError("targeted business-lot reduction exceeds open quantity")
+            current.quantity -= quantity
+            if current.quantity == ZERO:
+                self.business_lots.pop(key, None)
+            self._recompute()
+            return
+
+        # Legacy aggregate behavior is retained only for pre-identity checkpoint recovery.
         remaining = quantity
         if bucket is PositionBucket.CORE:
             used = min(remaining, self.core_quantity)
@@ -98,6 +186,74 @@ class _BucketState:
                     self.core_average = ZERO
                     self.core_opened_at = None
 
+    def position_lots(self) -> tuple[TacticalLot, ...]:
+        return tuple(
+            TacticalLot(
+                lot_id=str(item.identity.business_lot_id),
+                quantity=item.quantity,
+                average_price=item.average_price,
+                opened_at=item.opened_at,
+                business_identity=item.identity,
+                bucket=item.bucket,
+            )
+            for item in sorted(
+                self.business_lots.values(),
+                key=lambda value: (value.identity.business_trade_seq, value.identity.lot_index),
+            )
+            if item.quantity > ZERO
+        )
+
+    def restore_business_lots(self, payload: object) -> None:
+        if payload in (None, ()):
+            return
+        if not isinstance(payload, list):
+            raise TypeError("paper business_lots checkpoint must be a list")
+        restored: dict[str, _BusinessLotState] = {}
+        for raw in payload:
+            if not isinstance(raw, dict):
+                raise TypeError("paper business lot row must be a mapping")
+            identity = BusinessIdentity(
+                business_trade_id=raw["business_trade_id"],
+                business_trade_seq=int(raw["business_trade_seq"]),
+                business_lot_id=raw["business_lot_id"],
+                lot_index=int(raw.get("lot_index", 1)),
+                account_id=str(raw["account_id"]),
+                symbol=str(raw["symbol"]),
+                position_side=str(raw["position_side"]),
+            )
+            quantity = Decimal(str(raw["quantity"]))
+            if quantity <= ZERO:
+                continue
+            state = _BusinessLotState(
+                identity=identity,
+                bucket=PositionBucket(str(raw["bucket"])),
+                quantity=quantity,
+                average_price=Decimal(str(raw["average_price"])),
+                opened_at=self._aware(datetime.fromisoformat(str(raw["opened_at"]))),
+            )
+            restored[str(identity.business_lot_id)] = state
+        self.business_lots = restored
+        if restored:
+            self._recompute()
+
+    def encode_business_lots(self) -> list[dict[str, object]]:
+        return [
+            {
+                "business_trade_id": str(item.identity.business_trade_id),
+                "business_trade_seq": item.identity.business_trade_seq,
+                "business_lot_id": str(item.identity.business_lot_id),
+                "lot_index": item.identity.lot_index,
+                "account_id": item.identity.account_id,
+                "symbol": item.identity.symbol,
+                "position_side": item.identity.position_side,
+                "bucket": item.bucket.value,
+                "quantity": str(item.quantity),
+                "average_price": str(item.average_price),
+                "opened_at": item.opened_at.isoformat(),
+            }
+            for item in self.business_lots.values()
+        ]
+
 
 class PaperStateProjectionMixin:
     """Position, order, wallet, and risk projections for Paper runtime."""
@@ -112,8 +268,13 @@ class PaperStateProjectionMixin:
     def _leg(self: Any, side: PositionSide) -> LegPosition:
         fake = self._fake_leg(side)
         bucket = self._bucket[side]
+        exact_lots = bucket.position_lots()
         bucket_total = bucket.core_quantity + bucket.tactical_quantity
-        if bucket_total != fake.quantity:
+        if exact_lots and bucket_total != fake.quantity:
+            raise RuntimeError(
+                "Paper business-lot sum differs from authoritative execution quantity"
+            )
+        if not exact_lots and bucket_total != fake.quantity:
             delta = fake.quantity - bucket_total
             if delta > ZERO:
                 combined = bucket.tactical_quantity + delta
@@ -131,6 +292,10 @@ class PaperStateProjectionMixin:
             tactical_average_price=bucket.tactical_average,
             realized_pnl=fake.realized_pnl,
             tactical_realized_pnl=fake.realized_pnl,
+            tactical_lots=tuple(
+                item for item in exact_lots if item.bucket is PositionBucket.TACTICAL
+            ),
+            position_lots=exact_lots,
         )
 
     def _active_execution_orders(self: Any) -> tuple[Any, ...]:
@@ -204,6 +369,12 @@ class PaperStateProjectionMixin:
                     ),
                     created_at=order.created_at,
                     layer=int(order.intent.metadata.get("layer", 0)),
+                    business_identity=order.intent.business_identity,
+                    order_role=order.intent.order_role,
+                    order_revision=int(order.intent.order_revision),
+                    strategy_entry_key=str(
+                        order.intent.metadata.get("strategy_entry_key", "")
+                    ),
                 )
             )
         return tuple(rows)

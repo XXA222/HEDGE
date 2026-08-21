@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 from freqtrade.hedge.numeric import ZERO
 
+from .business_identity import BusinessOrderRole
 from .types import IntentAction, OrderSide, PositionKey
 from .types import PositionRecord as LegacyPositionRecord
 
@@ -207,6 +208,13 @@ class FillEvent(AccountEvent):
     exchange_time: datetime = field(default_factory=lambda: datetime.now(UTC))
     observed_time: datetime = field(default_factory=lambda: datetime.now(UTC))
     payload_version: int = 1
+    business_trade_id: UUID | None = None
+    business_lot_id: UUID | None = None
+    order_role: BusinessOrderRole | None = None
+
+    @property
+    def exchange_trade_id(self) -> str:
+        return self.trade_id
 
     _NEW_POSITIONAL = (
         "position_key",
@@ -270,12 +278,17 @@ class FillEvent(AccountEvent):
             result[name] = value
         return result
 
-    def _init_execution(self, args: tuple[object, ...], kwargs: dict[str, object]) -> None:
+    def _init_execution(  # noqa: C901 - canonical/legacy fill compatibility
+        self, args: tuple[object, ...], kwargs: dict[str, object]
+    ) -> None:
         values = self._merge_positional(self._NEW_POSITIONAL, args, kwargs)
         allowed = set(self._NEW_POSITIONAL) | {
             "correlation_id",
             "event_type",
             "hedge_event_version",
+            "business_trade_id",
+            "business_lot_id",
+            "order_role",
         }
         extra = sorted(set(values) - allowed)
         if extra:
@@ -369,6 +382,32 @@ class FillEvent(AccountEvent):
         object.__setattr__(self, "exchange_time", exchange_time)
         object.__setattr__(self, "observed_time", observed_time)
         object.__setattr__(self, "payload_version", payload_version)
+        business_trade_id = values.get("business_trade_id")
+        business_lot_id = values.get("business_lot_id")
+        if (business_trade_id is None) != (business_lot_id is None):
+            raise ValueError("fill business trade/lot identity must be supplied together")
+        if business_trade_id is not None:
+            business_trade_id = (
+                business_trade_id
+                if isinstance(business_trade_id, UUID)
+                else UUID(str(business_trade_id))
+            )
+            business_lot_id = (
+                business_lot_id if isinstance(business_lot_id, UUID) else UUID(str(business_lot_id))
+            )
+        raw_role = values.get("order_role")
+        role = (
+            None
+            if raw_role is None
+            else (
+                raw_role
+                if isinstance(raw_role, BusinessOrderRole)
+                else BusinessOrderRole(str(raw_role).upper())
+            )
+        )
+        object.__setattr__(self, "business_trade_id", business_trade_id)
+        object.__setattr__(self, "business_lot_id", business_lot_id)
+        object.__setattr__(self, "order_role", role)
 
     def _init_legacy(self, args: tuple[object, ...], kwargs: dict[str, object]) -> None:
         values = self._merge_positional(self._LEGACY_POSITIONAL, args, kwargs)
@@ -429,6 +468,9 @@ class FillEvent(AccountEvent):
         object.__setattr__(self, "exchange_time", exchange_time)
         object.__setattr__(self, "observed_time", observed_time)
         object.__setattr__(self, "payload_version", 1)
+        object.__setattr__(self, "business_trade_id", None)
+        object.__setattr__(self, "business_lot_id", None)
+        object.__setattr__(self, "order_role", None)
 
 
 @dataclass(frozen=True, slots=True)

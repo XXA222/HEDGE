@@ -34,7 +34,12 @@ def _compatible_family(desired: OrderIntent, active: ActiveOrder) -> bool:
         and desired.order_type is active.order_type
         and desired.time_in_force is active.time_in_force
         and (active.layer == 0 or desired.layer == active.layer)
-        and desired.tactical_lot_id == active.tactical_lot_id
+        and (
+            desired.business_identity is None
+            or active.business_identity is None
+            or desired.business_identity.business_lot_id
+            == active.business_identity.business_lot_id
+        )
     )
 
 
@@ -159,6 +164,7 @@ class PureHedgePlanner(StrategyPlanningPort):
         matched_managed: set[str] = set()
         submit: list[OrderIntent] = []
         modify: set[str] = set()
+        replacement_map: dict[str, str] = {}
         debounce_diag: list[str] = []
 
         for order in desired:
@@ -199,6 +205,7 @@ class PureHedgePlanner(StrategyPlanningPort):
             if compatible is not None:
                 matched_managed.add(compatible.order_id)
                 modify.add(compatible.order_id)
+                replacement_map[order.intent_id] = compatible.order_id
             submit.append(order)
 
         gross_ratio = context.wallet.gross_notional(context.market.mark) / max(
@@ -259,4 +266,5 @@ class PureHedgePlanner(StrategyPlanningPort):
             net_gap_quantity=long_target.net_gap_quantity,
             long_target_quantity=long_target.total_quantity,
             short_target_quantity=short_target.total_quantity,
+            replacement_order_map=tuple(sorted(replacement_map.items())),
         )

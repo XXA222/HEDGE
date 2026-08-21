@@ -13,6 +13,7 @@ from types import MappingProxyType
 from typing import Any, cast
 from uuid import UUID, uuid4
 
+from .business_identity import BusinessIdentity, BusinessOrderRole
 from .errors import HedgeContractError
 
 
@@ -344,9 +345,16 @@ class ExecutionOrderIntent:
     reduce_only: bool = False
     intent_id: UUID = field(default_factory=uuid4)
     action_group_id: UUID | None = None
+    business_trade_id: UUID | None = None
+    business_lot_id: UUID | None = None
+    business_trade_seq: int | None = None
+    lot_index: int | None = None
+    order_role: BusinessOrderRole | None = None
+    order_revision: int = 0
+    submission_generation: int = 0
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: C901 - canonical contract validation
         account_id = _execution_text(self.account_id, field_name="account_id", max_length=128)
         key = _execution_text(self.idempotency_key, field_name="idempotency_key", max_length=256)
         symbol = _execution_normalize_symbol(self.symbol)
@@ -389,6 +397,44 @@ class ExecutionOrderIntent:
         group_id = _execution_uuid(
             self.action_group_id, field_name="action_group_id", optional=True
         )
+        business_trade_id = _execution_uuid(
+            self.business_trade_id, field_name="business_trade_id", optional=True
+        )
+        business_lot_id = _execution_uuid(
+            self.business_lot_id, field_name="business_lot_id", optional=True
+        )
+        identity_values = (
+            business_trade_id,
+            business_lot_id,
+            self.business_trade_seq,
+            self.lot_index,
+            self.order_role,
+        )
+        if any(value is not None for value in identity_values) and not all(
+            value is not None for value in identity_values
+        ):
+            raise ValueError("business identity fields must be supplied as one complete set")
+        role = None
+        if self.order_role is not None:
+            role = (
+                self.order_role
+                if isinstance(self.order_role, BusinessOrderRole)
+                else BusinessOrderRole(str(self.order_role).upper())
+            )
+            if isinstance(self.business_trade_seq, bool) or int(self.business_trade_seq) <= 0:
+                raise ValueError("business_trade_seq must be positive")
+            if isinstance(self.lot_index, bool) or int(self.lot_index) <= 0:
+                raise ValueError("lot_index must be positive")
+            if role.reduces_risk and not reduce_only:
+                raise ValueError("risk-reducing business order role must be reduce_only")
+            if role.reduces_risk != action.reduces_risk:
+                raise ValueError("business order role conflicts with execution action")
+        for name, value in (
+            ("order_revision", self.order_revision),
+            ("submission_generation", self.submission_generation),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"{name} must be a nonnegative integer")
         metadata = _execution_freeze_mapping(self.metadata, field_name="metadata")
         object.__setattr__(self, "account_id", account_id)
         object.__setattr__(self, "symbol", symbol)
@@ -401,7 +447,26 @@ class ExecutionOrderIntent:
         object.__setattr__(self, "reduce_only", reduce_only)
         object.__setattr__(self, "intent_id", intent_id)
         object.__setattr__(self, "action_group_id", group_id)
+        object.__setattr__(self, "business_trade_id", business_trade_id)
+        object.__setattr__(self, "business_lot_id", business_lot_id)
+        object.__setattr__(self, "business_trade_seq", self.business_trade_seq)
+        object.__setattr__(self, "lot_index", self.lot_index)
+        object.__setattr__(self, "order_role", role)
         object.__setattr__(self, "metadata", metadata)
+
+    @property
+    def business_identity(self) -> BusinessIdentity | None:
+        if self.business_trade_id is None:
+            return None
+        return BusinessIdentity(
+            business_trade_id=self.business_trade_id,
+            business_trade_seq=int(self.business_trade_seq),
+            business_lot_id=self.business_lot_id,
+            lot_index=int(self.lot_index),
+            account_id=self.account_id,
+            symbol=self.symbol,
+            position_side=self.position_side,
+        )
 
     @property
     def reduces_risk(self) -> bool:

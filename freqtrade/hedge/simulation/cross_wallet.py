@@ -195,10 +195,20 @@ class MutableLeg:
         fee: Decimal,
         tactical_lot_id: str | None,
     ) -> tuple[Decimal, Decimal]:
+        if tactical_lot_id is not None:
+            lot = self.tactical_lots.get(tactical_lot_id)
+            if lot is None or lot.quantity <= ZERO:
+                raise ValueError("target tactical/business lot is not open")
+            if qty > lot.quantity:
+                raise ValueError("targeted lot reduction exceeds target lot quantity")
+            pnl = lot.reduce(qty, price, fee, self.side.direction)
+            self._refresh_tactical_aggregate()
+            return pnl, qty
+
         remaining = min(qty, self.tactical_quantity)
         reduced = ZERO
         pnl = ZERO
-        for lot in self._open_lots(tactical_lot_id):
+        for lot in self._open_lots():
             if remaining <= ZERO:
                 break
             lot_qty = min(remaining, lot.quantity)

@@ -178,6 +178,16 @@ class PaperMatchingMixin:
                 if order.intent.metadata.get("tactical_lot_id") is None
                 else str(order.intent.metadata.get("tactical_lot_id"))
             ),
+            business_identity=order.intent.business_identity,
+            order_role=order.intent.order_role,
+            target_business_lot_id=order.intent.business_lot_id
+            if order.intent.reduces_risk
+            else None,
+            strategy_entry_key=str(
+                order.intent.metadata.get("strategy_entry_key", "")
+            ),
+            order_revision=int(order.intent.order_revision),
+            submission_generation=int(order.intent.submission_generation),
         )
         self._simulation_intents[order.client_order_id] = planner_intent
         return planner_intent
@@ -196,26 +206,63 @@ class PaperMatchingMixin:
         for side in (PositionSide.LONG, PositionSide.SHORT):
             state = self._bucket[side]
             leg = wallet.leg(side)
-            if state.core_quantity > ZERO:
-                leg.increase(
-                    state.core_quantity,
-                    state.core_average,
-                    PositionBucket.CORE,
-                    tactical_lot_id=None,
-                    opened_at=now,
-                    layer=0,
-                    fee=ZERO,
+            exact_lots = state.position_lots()
+            if exact_lots:
+                core_qty = sum(
+                    (lot.quantity for lot in exact_lots if lot.bucket is PositionBucket.CORE),
+                    ZERO,
                 )
-            if state.tactical_quantity > ZERO:
-                leg.increase(
-                    state.tactical_quantity,
-                    state.tactical_average,
-                    PositionBucket.TACTICAL,
-                    tactical_lot_id=f"paper-recovered-{side.value.lower()}",
-                    opened_at=now,
-                    layer=0,
-                    fee=ZERO,
-                )
+                if core_qty > ZERO:
+                    core_quote = sum(
+                        (
+                            lot.quantity * lot.average_price
+                            for lot in exact_lots
+                            if lot.bucket is PositionBucket.CORE
+                        ),
+                        ZERO,
+                    )
+                    leg.increase(
+                        core_qty,
+                        core_quote / core_qty,
+                        PositionBucket.CORE,
+                        tactical_lot_id=None,
+                        opened_at=now,
+                        layer=0,
+                        fee=ZERO,
+                    )
+                for lot in exact_lots:
+                    if lot.bucket is not PositionBucket.TACTICAL:
+                        continue
+                    leg.increase(
+                        lot.quantity,
+                        lot.average_price,
+                        PositionBucket.TACTICAL,
+                        tactical_lot_id=lot.lot_id,
+                        opened_at=lot.opened_at,
+                        layer=lot.layer,
+                        fee=ZERO,
+                    )
+            else:
+                if state.core_quantity > ZERO:
+                    leg.increase(
+                        state.core_quantity,
+                        state.core_average,
+                        PositionBucket.CORE,
+                        tactical_lot_id=None,
+                        opened_at=now,
+                        layer=0,
+                        fee=ZERO,
+                    )
+                if state.tactical_quantity > ZERO:
+                    leg.increase(
+                        state.tactical_quantity,
+                        state.tactical_average,
+                        PositionBucket.TACTICAL,
+                        tactical_lot_id=f"paper-legacy-{side.value.lower()}",
+                        opened_at=now,
+                        layer=0,
+                        fee=ZERO,
+                    )
             fake = self._fake_leg(side)
             leg.realized_pnl = fake.realized_pnl
             leg.tactical_realized_pnl = fake.realized_pnl
@@ -291,9 +338,27 @@ class PaperMatchingMixin:
                 account_events.append(fee_event)
             state = self._bucket[fill.position_side]
             if fill.action in {IntentAction.OPEN, IntentAction.INCREASE}:
-                state.increase(fill.bucket, fill.quantity, fill.price, fill.timestamp)
+                state.increase(
+                    fill.bucket,
+                    fill.quantity,
+                    fill.price,
+                    fill.timestamp,
+                    business_identity=(
+                        None
+                        if planner_for_callback is None
+                        else planner_for_callback.business_identity
+                    ),
+                )
             else:
-                state.reduce(fill.bucket, fill.quantity)
+                state.reduce(
+                    fill.bucket,
+                    fill.quantity,
+                    business_identity=(
+                        None
+                        if planner_for_callback is None
+                        else planner_for_callback.business_identity
+                    ),
+                )
             if result.order.lifecycle.filled_quantity >= result.order.approved_quantity:
                 self._simulation_intents.pop(fill.order_id, None)
         for client_id in outcome.expired_order_ids:

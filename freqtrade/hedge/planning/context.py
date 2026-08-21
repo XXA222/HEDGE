@@ -8,6 +8,7 @@ from hashlib import sha256
 from json import dumps
 from typing import Protocol, runtime_checkable
 
+from freqtrade.hedge.contracts.business_identity import BusinessIdentity, BusinessOrderRole
 from freqtrade.hedge.numeric import ZERO
 
 
@@ -140,6 +141,8 @@ class TacticalLot:
     fees: Decimal = ZERO
     funding: Decimal = ZERO
     closed_quantity: Decimal = ZERO
+    business_identity: BusinessIdentity | None = None
+    bucket: PositionBucket = PositionBucket.TACTICAL
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "opened_at", utc_aware(self.opened_at))
@@ -165,6 +168,12 @@ class TacticalLot:
             raise ValueError("tactical lot fees cannot be negative")
         if self.layer < 0:
             raise ValueError("tactical lot layer cannot be negative")
+        if self.business_identity is not None and not isinstance(
+            self.business_identity, BusinessIdentity
+        ):
+            raise TypeError("business_identity must be BusinessIdentity")
+        if not isinstance(self.bucket, PositionBucket):
+            raise TypeError("bucket must be PositionBucket")
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,6 +188,7 @@ class LegPosition:
     realized_pnl: Decimal = ZERO
     tactical_realized_pnl: Decimal = ZERO
     tactical_lots: tuple[TacticalLot, ...] = ()
+    position_lots: tuple[TacticalLot, ...] = ()
 
     def __post_init__(self) -> None:
         numeric = (
@@ -215,6 +225,18 @@ class LegPosition:
         open_lot_qty = sum((lot.quantity for lot in self.tactical_lots), ZERO)
         if self.tactical_lots and open_lot_qty != self.tactical_quantity:
             raise ValueError("open tactical lot quantity must equal tactical quantity")
+        position_lot_ids = [lot.lot_id for lot in self.position_lots]
+        if len(position_lot_ids) != len(set(position_lot_ids)):
+            raise ValueError("position lot ids must be unique")
+        if self.position_lots:
+            total = sum((lot.quantity for lot in self.position_lots), ZERO)
+            core = sum(
+                (lot.quantity for lot in self.position_lots if lot.bucket is PositionBucket.CORE),
+                ZERO,
+            )
+            tactical = total - core
+            if total != self.quantity or core != self.core_quantity or tactical != self.tactical_quantity:
+                raise ValueError("position lot quantities must equal the side aggregate")
 
     def unrealized_pnl(self, mark: Decimal) -> Decimal:
         if not mark.is_finite() or mark <= ZERO:
@@ -241,6 +263,10 @@ class ActiveOrder:
     time_in_force: TimeInForce = TimeInForce.GTC
     layer: int = 0
     tactical_lot_id: str | None = None
+    business_identity: BusinessIdentity | None = None
+    order_role: BusinessOrderRole | None = None
+    order_revision: int = 0
+    strategy_entry_key: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "created_at", utc_aware(self.created_at))
@@ -640,6 +666,12 @@ class OrderIntent:
     layer: int = 0
     reason: str = ""
     tactical_lot_id: str | None = None
+    business_identity: BusinessIdentity | None = None
+    order_role: BusinessOrderRole | None = None
+    target_business_lot_id: object | None = None
+    strategy_entry_key: str = ""
+    order_revision: int = 0
+    submission_generation: int = 0
 
     def __post_init__(self) -> None:
         if not self.intent_id or not self.symbol.strip():
@@ -686,6 +718,12 @@ class OrderIntent:
         reason: str = "",
         epoch: str = "",
         tactical_lot_id: str | None = None,
+        strategy_entry_key: str = "",
+        business_identity: BusinessIdentity | None = None,
+        order_role: BusinessOrderRole | None = None,
+        target_business_lot_id: object | None = None,
+        order_revision: int = 0,
+        submission_generation: int = 0,
     ) -> OrderIntent:
         payload = {
             "symbol": symbol,
@@ -702,6 +740,7 @@ class OrderIntent:
             "reason": reason,
             "epoch": epoch,
             "tactical_lot_id": tactical_lot_id or "",
+            "strategy_entry_key": strategy_entry_key,
         }
         serialized = dumps(payload, sort_keys=True, separators=(",", ":"))
         digest = sha256(serialized.encode()).hexdigest()[:24]
@@ -720,6 +759,12 @@ class OrderIntent:
             layer=layer,
             reason=reason,
             tactical_lot_id=tactical_lot_id,
+            strategy_entry_key=strategy_entry_key,
+            business_identity=business_identity,
+            order_role=order_role,
+            target_business_lot_id=target_business_lot_id,
+            order_revision=order_revision,
+            submission_generation=submission_generation,
         )
 
 
@@ -739,6 +784,7 @@ class PlanningResult:
     net_gap_quantity: Decimal = ZERO
     long_target_quantity: Decimal = ZERO
     short_target_quantity: Decimal = ZERO
+    replacement_order_map: tuple[tuple[str, str], ...] = ()
 
 
 @runtime_checkable

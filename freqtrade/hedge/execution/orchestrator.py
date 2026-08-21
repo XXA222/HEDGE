@@ -341,7 +341,12 @@ class HedgeExecutionEngine:
             ),
             observed_time=self._clock.now(),
             fee=(Decimal(0) if snapshot is None else snapshot.last_fill_fee),
-            fee_currency=("USDT" if snapshot is None else snapshot.fee_currency or "USDT"),
+            fee_currency=(
+                "USDT" if snapshot is None else snapshot.fee_currency or "USDT"
+            ),
+            business_trade_id=current.intent.business_trade_id,
+            business_lot_id=current.intent.business_lot_id,
+            order_role=current.intent.order_role,
         )
 
     @staticmethod
@@ -358,6 +363,20 @@ class HedgeExecutionEngine:
             "symbol": key.symbol,
             "position_side": key.position_side.value,
             "intent_id": str(order.intent.intent_id),
+            "business_trade_id": (
+                None
+                if order.intent.business_trade_id is None
+                else str(order.intent.business_trade_id)
+            ),
+            "business_trade_seq": order.intent.business_trade_seq,
+            "business_lot_id": (
+                None
+                if order.intent.business_lot_id is None
+                else str(order.intent.business_lot_id)
+            ),
+            "order_role": (
+                None if order.intent.order_role is None else order.intent.order_role.value
+            ),
             "client_order_id": order.client_order_id,
             "action": order.intent.action.value,
             "status": order.lifecycle.status.value,
